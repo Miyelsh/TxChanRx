@@ -1,10 +1,10 @@
 import numpy as np
 
-NUM_SYMBOLS = 2**10
+NUM_SYMBOLS = 2**12
 BITS_PER_SYMBOL = 2
 NUM_BITS = NUM_SYMBOLS*BITS_PER_SYMBOL
 SYMBOL_POWER = 1.0
-NOISE_POWER = 0.2
+NOISE_POWER = 0.5
 
 def generate_bits(size):
     return np.random.randint(2, size=size)
@@ -100,13 +100,14 @@ def downsample2x(input):
 def upsample_sps_x(input, sps):
     # Insert zeros between samples
     input_sps_x = np.zeros(sps*len(input), dtype=complex)
-    for sample_idx in range(len(input_sps_x)):
-        input_sps_x[sample_idx] = input[sample_idx//sps]
+    for sample_idx in range(len(input)):
+        input_sps_x[sps*sample_idx] = input[sample_idx]
 
     # Linear interpolate
     filter_kernel = np.ones(sps)
     filter = np.convolve(filter_kernel,filter_kernel)/sps
-    print(filter)
+    # filter = filter / np.sum(filter*filter)
+    print(f"SPS: {sps}, Filter Power = {np.sum(filter*filter)}")
     y = np.convolve(filter, input_sps_x, mode="same")
     return y
 
@@ -123,20 +124,20 @@ def main():
     #const_plot(symbols)
 
     num_symbols = len(symbols)
-    symbols_received_awgn      = symbols + awgn(num_symbols, NOISE_POWER)
-    symbols_received_resampled_2x = downsample2x(upsample2x(symbols + awgn(num_symbols, NOISE_POWER)))
-    symbols_received_resampled_3x = downsample_sps_x(upsample_sps_x(symbols + awgn(num_symbols, NOISE_POWER),3),3)
-    bits_receieved_awgn = convert_symbols_to_bits(symbols_received_awgn, BITS_PER_SYMBOL, len(symbols))
-    bits_receieved_resampled_2x = convert_symbols_to_bits(symbols_received_resampled_2x, BITS_PER_SYMBOL, len(symbols))
-    bits_receieved_resampled_3x = convert_symbols_to_bits(symbols_received_resampled_3x, BITS_PER_SYMBOL, len(symbols))
+    # symbols_received_awgn      = symbols + awgn(num_symbols, NOISE_POWER)
+    # symbols_received_resampled_2x = downsample2x(upsample2x(symbols + awgn(num_symbols, NOISE_POWER)))
+    # symbols_received_resampled_3x = downsample_sps_x(upsample_sps_x(symbols + awgn(num_symbols, NOISE_POWER),3),3)
+    # bits_receieved_awgn = convert_symbols_to_bits(symbols_received_awgn, BITS_PER_SYMBOL, len(symbols))
+    # bits_receieved_resampled_2x = convert_symbols_to_bits(symbols_received_resampled_2x, BITS_PER_SYMBOL, len(symbols))
+    # bits_receieved_resampled_3x = convert_symbols_to_bits(symbols_received_resampled_3x, BITS_PER_SYMBOL, len(symbols))
 
-    bit_errors_awgn      = np.abs(bits_receieved_awgn - bits)
-    bit_errors_resampled_2x = np.abs(bits_receieved_resampled_2x - bits)
-    bit_errors_resampled_3x = np.abs(bits_receieved_resampled_3x - bits)
+    # bit_errors_awgn      = np.abs(bits_receieved_awgn - bits)
+    # bit_errors_resampled_2x = np.abs(bits_receieved_resampled_2x - bits)
+    # bit_errors_resampled_3x = np.abs(bits_receieved_resampled_3x - bits)
 
-    num_bit_errors_awgn      = np.sum(bit_errors_awgn)
-    num_bit_errors_resampled_2x = np.sum(bit_errors_resampled_2x)
-    num_bit_errors_resampled_3x = np.sum(bit_errors_resampled_3x)
+    # num_bit_errors_awgn      = np.sum(bit_errors_awgn)
+    # num_bit_errors_resampled_2x = np.sum(bit_errors_resampled_2x)
+    # num_bit_errors_resampled_3x = np.sum(bit_errors_resampled_3x)
 
     # print(symbols)
     # print(symbols_received_resampled_2x)
@@ -145,7 +146,7 @@ def main():
     # print(bit_errors)
 
     # plot_const(symbols, symbols_received_awgn)
-    plot_const(symbols, symbols_received_resampled_2x)
+    # plot_const(symbols, symbols_received_resampled_2x)
     # plot_const(symbols, symbols_received_resampled_3x)
 
     symbols_received_sps_1_to_16 = [
@@ -164,9 +165,13 @@ def main():
     # print(symbols_received_sps_1_to_16[1])
     # plot_const(symbols, symbols_received_sps_1_to_16[15])
 
+    print("Received Symbol Power")
+    [ print(np.mean(x*np.conj(x))) for x in symbols_received_sps_1_to_16 ]
+
     # [ print(x) for x in bits_received_sps_1_to_16 ]
     print("Error Rates")
     [ print(x/NUM_BITS) for x in bits_errors_sps_1_to_16 ]
+
 
     # print(len(symbols_received_sps_1_to_16[0]))
     # print(len(symbols_received_resampled_2x))
