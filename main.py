@@ -4,7 +4,7 @@ NUM_SYMBOLS = 2**12
 BITS_PER_SYMBOL = 2
 NUM_BITS = NUM_SYMBOLS*BITS_PER_SYMBOL
 SYMBOL_POWER = 1.0
-NOISE_POWER = 0.5
+NOISE_POWER = 0.1
 
 def generate_bits(size):
     return np.random.randint(2, size=size)
@@ -106,14 +106,39 @@ def upsample_sps_x(input, sps):
     # Linear interpolate
     filter_kernel = np.ones(sps)
     filter = np.convolve(filter_kernel,filter_kernel)/sps
-    # filter = filter / np.sum(filter*filter)
-    print(f"SPS: {sps}, Filter Power = {np.sum(filter*filter)}")
+    # print(f"SPS: {sps}, Filter Power = {np.sum(filter*filter)}")
     y = np.convolve(filter, input_sps_x, mode="same")
     return y
 
 def downsample_sps_x(input, sps):
     y = input[::sps] # capture every other
     return y
+
+def est_symbol_power(x):
+    return np.mean(np.abs(x*np.conj(x)))
+
+def est_symbol_qpsk_esno(symbols):
+    symbols_first_quadrant = [ complex(np.abs(symbol.real), np.abs(symbol.imag)) for symbol in symbols ]
+    symbols_dc_removed = np.array(symbols_first_quadrant) - np.mean(symbols_first_quadrant)
+    symbol_power = est_symbol_power(symbols) - est_symbol_power(symbols_dc_removed)
+    noise_power = est_symbol_power(symbols_dc_removed)
+    esno_linear = symbol_power/noise_power
+    return 10*np.log10(esno_linear)
+
+def est_symbol_radial_esno(x):
+    return 0
+
+def est_symbol_tx_rx_esno(symbols_tx,symbols_rx):
+    symbols_tx_normalized = symbols_tx#/est_symbol_power(symbols_tx)
+    symbols_rx_normalized = symbols_rx#/est_symbol_power(symbols_rx)
+    symbols_diff = symbols_tx_normalized - symbols_rx_normalized
+    symbol_power = 1.0# - est_symbol_power(symbols_diff)
+    noise_power = est_symbol_power(symbols_diff)
+    esno_linear = symbol_power/noise_power
+    return 10*np.log10(esno_linear)
+
+def bit_error_rate(bits_tx, bits_rx):
+    return np.mean(np.abs(bits_tx-bits_rx))
 
 def main():
     bits = generate_bits(NUM_BITS)
@@ -124,20 +149,6 @@ def main():
     #const_plot(symbols)
 
     num_symbols = len(symbols)
-    # symbols_received_awgn      = symbols + awgn(num_symbols, NOISE_POWER)
-    # symbols_received_resampled_2x = downsample2x(upsample2x(symbols + awgn(num_symbols, NOISE_POWER)))
-    # symbols_received_resampled_3x = downsample_sps_x(upsample_sps_x(symbols + awgn(num_symbols, NOISE_POWER),3),3)
-    # bits_receieved_awgn = convert_symbols_to_bits(symbols_received_awgn, BITS_PER_SYMBOL, len(symbols))
-    # bits_receieved_resampled_2x = convert_symbols_to_bits(symbols_received_resampled_2x, BITS_PER_SYMBOL, len(symbols))
-    # bits_receieved_resampled_3x = convert_symbols_to_bits(symbols_received_resampled_3x, BITS_PER_SYMBOL, len(symbols))
-
-    # bit_errors_awgn      = np.abs(bits_receieved_awgn - bits)
-    # bit_errors_resampled_2x = np.abs(bits_receieved_resampled_2x - bits)
-    # bit_errors_resampled_3x = np.abs(bits_receieved_resampled_3x - bits)
-
-    # num_bit_errors_awgn      = np.sum(bit_errors_awgn)
-    # num_bit_errors_resampled_2x = np.sum(bit_errors_resampled_2x)
-    # num_bit_errors_resampled_3x = np.sum(bit_errors_resampled_3x)
 
     # print(symbols)
     # print(symbols_received_resampled_2x)
@@ -146,39 +157,43 @@ def main():
     # print(bit_errors)
 
     # plot_const(symbols, symbols_received_awgn)
-    # plot_const(symbols, symbols_received_resampled_2x)
-    # plot_const(symbols, symbols_received_resampled_3x)
 
-    symbols_received_sps_1_to_16 = [
-            downsample_sps_x(upsample_sps_x(symbols + awgn(num_symbols, NOISE_POWER),sps),sps)
-            for sps in range(1,1+16) ]
+    sps = 1
+    noise_powers = np.arange(0.05,1.0,0.05)
+    noise_powers_db = -20*np.log10(noise_powers) - 3
+    print(noise_powers_db)
+    symbols_received_noise_0_to_1 = [
+            downsample_sps_x(upsample_sps_x(symbols + awgn(num_symbols, noise_power),sps),sps)
+            for noise_power in noise_powers ]
 
     bits_received_sps_1_to_16 = [
             convert_symbols_to_bits(x, BITS_PER_SYMBOL, NUM_SYMBOLS)
-            for x in symbols_received_sps_1_to_16 ]
+            for x in symbols_received_noise_0_to_1 ]
 
-    bits_errors_sps_1_to_16 = [
-            np.sum(np.abs(bits-x))
-            for x in bits_received_sps_1_to_16 ]
+    # print("Received Symbol Power")
+    # [ print(est_symbol_power(x)) for x in symbols_received_noise_0_to_1 ]
 
-    # plot_const(symbols, symbols_received_sps_1_to_16[1])
-    # print(symbols_received_sps_1_to_16[1])
-    # plot_const(symbols, symbols_received_sps_1_to_16[15])
+    qpsk_esnos = [ est_symbol_qpsk_esno(x) for x in symbols_received_noise_0_to_1 ]
+    print("Received Symbol QPSK EsNo")
+    print(qpsk_esnos)
 
-    print("Received Symbol Power")
-    [ print(np.mean(x*np.conj(x))) for x in symbols_received_sps_1_to_16 ]
+    # print("Received Symbol Radial EsNo")
+    # [ print(est_symbol_radial_esno(x)) for x in symbols_received_noise_0_to_1 ]
 
-    # [ print(x) for x in bits_received_sps_1_to_16 ]
-    print("Error Rates")
-    [ print(x/NUM_BITS) for x in bits_errors_sps_1_to_16 ]
+    print("Received Symbol TX RX EsNo")
+    tx_rx_esnos = [ est_symbol_tx_rx_esno(symbols,x) for x in symbols_received_noise_0_to_1 ]
+    print(tx_rx_esnos)
 
+    plt.figure()
+    plt.grid()
+    plt.plot(noise_powers_db, noise_powers_db)
+    plt.plot(noise_powers_db, qpsk_esnos)
+    plt.plot(noise_powers_db, tx_rx_esnos)
+    plt.legend(["True EsNo", "QPSK EsNo", "TX RX EsNo"])
 
-    # print(len(symbols_received_sps_1_to_16[0]))
-    # print(len(symbols_received_resampled_2x))
+    # print("Error Rates")
+    # [ print(bit_error_rate(bits,x)) for x in bits_received_sps_1_to_16 ]
 
-    # print(num_bit_errors_awgn/NUM_BITS)
-    # print(num_bit_errors_resampled_2x/NUM_BITS)
-    # print(num_bit_errors_resampled_3x/NUM_BITS)
     plt.show()
 
 if __name__ == "__main__":
