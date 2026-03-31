@@ -58,7 +58,9 @@ def convert_symbols_to_bits(symbols, bits_per_symbol, expected_num_symbols):
 
     return bits
 
-def awgn(size, noise_power):
+def awgn(size, symbol_power, osnr_db):
+    osnr_linear = np.pow(10, osnr_db/10.0)
+    noise_power = symbol_power/osnr_linear
     return np.sqrt(noise_power/2)*(np.random.randn(size) + 1j*np.random.randn(size))
 
 import matplotlib.pyplot as plt
@@ -157,13 +159,15 @@ def main():
     # print(bit_errors)
 
     sps = 1
-    noise_powers = np.arange(0.01,10.0,0.01)
-    noise_powers_db = -10*np.log10(noise_powers)
+    osnr_db_sweep = np.arange(-10, 20, 0.1)
+    osnr_linear_sweep = np.pow(10, osnr_db_sweep/10.0)
+    noise_power_sweep = SYMBOL_POWER/osnr_linear_sweep
+    noise_power_db_sweep = -10*np.log10(noise_power_sweep)
     # print(noise_powers)
     # print(noise_powers_db)
     symbols_received_noise_sweep = [
-            downsample_sps_x(upsample_sps_x(symbols + awgn(num_symbols, noise_power),sps),sps)
-            for noise_power in noise_powers ]
+            downsample_sps_x(upsample_sps_x(symbols + awgn(num_symbols, SYMBOL_POWER, osnr_db),sps),sps)
+            for osnr_db in osnr_db_sweep ]
 
     bits_received_noise_sweep = [
             convert_symbols_to_bits(x, BITS_PER_SYMBOL, NUM_SYMBOLS)
@@ -185,9 +189,9 @@ def main():
 
     plt.figure()
     plt.grid()
-    plt.plot(noise_powers_db, noise_powers_db)
-    plt.plot(noise_powers_db, qpsk_esnos)
-    plt.plot(noise_powers_db, tx_rx_esnos)
+    plt.plot(osnr_db_sweep, noise_power_db_sweep)
+    plt.plot(osnr_db_sweep, qpsk_esnos)
+    plt.plot(osnr_db_sweep, tx_rx_esnos)
     plt.legend(["True EsNo", "QPSK EsNo", "TX RX EsNo"])
 
     bit_error_rates_noise_sweep = [ bit_error_rate(bits,x) for x in bits_received_noise_sweep ]
@@ -195,7 +199,7 @@ def main():
 
     plt.figure()
     plt.grid()
-    plt.semilogy(noise_powers_db, bit_error_rates_noise_sweep)
+    plt.semilogy(noise_power_db_sweep, bit_error_rates_noise_sweep)
 
     plot_const(symbols, symbols_received_noise_sweep[0])
     plot_const(symbols, symbols_received_noise_sweep[-1])
