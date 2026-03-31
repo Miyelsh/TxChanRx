@@ -147,11 +147,20 @@ def est_symbol_qpsk_esno(symbols, enable_abs_correction):
     noise_power = est_symbol_power(symbols_dc_removed)
     symbol_power = est_symbol_power(symbols) - noise_power
     # symbol_power = est_symbol_power(symbols) # slightly less accurate
-    esno_linear = symbol_power/noise_power
-    return 10*np.log10(esno_linear)
+    qpsk_esno_linear = symbol_power/noise_power
+    return 10*np.log10(qpsk_esno_linear)
 
-def est_symbol_radial_esno(x):
-    return 0
+def est_symbol_radial_esno(symbols):
+    avg_radius = np.mean( np.abs(symbols) )
+    rms        = np.sqrt( np.mean(np.abs(symbols*symbols.conj())) )
+
+    if rms <= avg_radius:
+        radial_esno_linear = np.inf
+    else:
+        # radial_esno_linear = ( 0.5 * avg_radius**2 / (rms**2 - avg_radius**2) ) - 1
+        radial_esno_linear = ( 0.5 * avg_radius**2 / (rms**2 - avg_radius**2) ) - 1
+
+    return 10*np.log10(radial_esno_linear)
 
 def est_symbol_tx_rx_esno(symbols_tx,symbols_rx):
     symbols_tx_normalized = symbols_tx#/est_symbol_power(symbols_tx)
@@ -204,8 +213,7 @@ def main():
     # print("Received Symbol QPSK EsNo")
     # print(qpsk_esnos)
 
-    # print("Received Symbol Radial EsNo")
-    # [ print(est_symbol_radial_esno(x)) for x in symbols_received_noise_sweep ]
+    radial_esnos = np.array([ est_symbol_radial_esno(x) for x in symbols_received_noise_sweep ])
 
     tx_rx_esnos = [ est_symbol_tx_rx_esno(symbols,x) for x in symbols_received_noise_sweep ]
     # print("Received Symbol TX RX EsNo")
@@ -217,8 +225,9 @@ def main():
     plt.plot(osnr_db_sweep, noise_power_db_sweep)
     plt.plot(osnr_db_sweep, qpsk_esnos)
     plt.plot(osnr_db_sweep, qpsk_esnos_no_abs_correction)
+    plt.plot(osnr_db_sweep, radial_esnos)
     plt.plot(osnr_db_sweep, tx_rx_esnos)
-    plt.legend(["True EsNo", "QPSK EsNo", "QPSK EsNo (no abs correction)", "TX RX EsNo"])
+    plt.legend(["True EsNo", "QPSK EsNo", "QPSK EsNo (no abs correction)", "Radial EsNo", "TX RX EsNo"])
 
     plt.figure()
     plt.grid()
@@ -226,8 +235,9 @@ def main():
     plt.plot(osnr_db_sweep, noise_power_db_sweep - osnr_db_sweep)
     plt.plot(osnr_db_sweep, qpsk_esnos - osnr_db_sweep)
     plt.plot(osnr_db_sweep, qpsk_esnos_no_abs_correction - osnr_db_sweep)
+    plt.plot(osnr_db_sweep, radial_esnos - osnr_db_sweep)
     plt.plot(osnr_db_sweep, tx_rx_esnos - osnr_db_sweep)
-    plt.legend(["True EsNo", "QPSK EsNo", "QPSK EsNo (no abs correction)", "TX RX EsNo"])
+    plt.legend(["True EsNo", "QPSK EsNo", "QPSK EsNo (no abs correction)", "Radial EsNo", "TX RX EsNo"])
 
     bit_error_rates_noise_sweep = [ bit_error_rate(bits,x) for x in bits_received_noise_sweep ]
     # print("Error Rates")
@@ -238,9 +248,9 @@ def main():
     print(qpsk_esnos_rms_error)
     print(qpsk_esnos_abs_error)
 
-    # plt.figure()
-    # plt.grid()
-    # plt.semilogy(noise_power_db_sweep, bit_error_rates_noise_sweep)
+    plt.figure()
+    plt.grid()
+    plt.semilogy(noise_power_db_sweep, bit_error_rates_noise_sweep)
 
     # plot_const(symbols, symbols_received_noise_sweep[0])
 
