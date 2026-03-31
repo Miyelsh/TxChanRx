@@ -1,6 +1,6 @@
 import numpy as np
 
-NUM_SYMBOLS = 2**12
+NUM_SYMBOLS = 2**18
 BITS_PER_SYMBOL = 2
 NUM_BITS = NUM_SYMBOLS*BITS_PER_SYMBOL
 SYMBOL_POWER = 1.0
@@ -116,15 +116,37 @@ def downsample_sps_x(input, sps):
     y = input[::sps] # capture every other
     return y
 
+def channel_model(symbols, symbol_power, osnr_db, sps):
+    symbols_plus_awgn = symbols + awgn(len(symbols), symbol_power, osnr_db)
+
+    return downsample_sps_x(upsample_sps_x(symbols_plus_awgn, sps), sps)
+
 def est_symbol_power(x):
     return np.mean(np.abs(x*np.conj(x)))
 
-def est_symbol_qpsk_esno(symbols):
-    symbols_first_quadrant = [ complex(np.abs(symbol.real), np.abs(symbol.imag)) for symbol in symbols ]
+def est_symbol_qpsk_esno(symbols, enable_abs_correction):
+    symbols_first_quadrant = np.array([ complex(np.abs(symbol.real), np.abs(symbol.imag)) for symbol in symbols ])
+    # if enable_abs_correction:
+    #     for idx in range(len(symbols_first_quadrant)):
+    #         symbol = symbols_first_quadrant[idx]
+    #         scale_thresh = 1.66 # 1.66
+    #         scale_mult = 1.35 # 1.35
+    #         if symbol.real > scale_thresh:
+    #             symbols_first_quadrant[idx] = complex(scale_mult*symbol.real, symbol.imag)
+    #         if symbol.imag > scale_thresh:
+    #             symbols_first_quadrant[idx] = complex(symbol.real, scale_mult*symbol.imag)
+    if enable_abs_correction:
+        for idx in range(len(symbols_first_quadrant)):
+            symbol = symbols_first_quadrant[idx]
+            scale_thresh = 1.92 # 1.92
+            scale_mult = 1.34 # 1.34
+            if np.abs(symbol) > scale_thresh:
+                symbols_first_quadrant[idx] = scale_mult*symbol
     symbols_dc_removed = np.array(symbols_first_quadrant) - np.mean(symbols_first_quadrant)
-    symbol_power = est_symbol_power(symbols) - est_symbol_power(symbols_dc_removed)
-    # symbol_power = est_symbol_power(symbols) # slightly less accurate
+    # plot_const(symbols_first_quadrant, symbols_dc_removed)
     noise_power = est_symbol_power(symbols_dc_removed)
+    symbol_power = est_symbol_power(symbols) - noise_power
+    # symbol_power = est_symbol_power(symbols) # slightly less accurate
     esno_linear = symbol_power/noise_power
     return 10*np.log10(esno_linear)
 
@@ -159,14 +181,15 @@ def main():
     # print(bit_errors)
 
     sps = 1
-    osnr_db_sweep = np.arange(-10, 20, 0.1)
+    osnr_db_sweep = np.arange(0, 20, 2)
+    # osnr_db_sweep = np.arange(1)
     osnr_linear_sweep = np.pow(10, osnr_db_sweep/10.0)
     noise_power_sweep = SYMBOL_POWER/osnr_linear_sweep
     noise_power_db_sweep = -10*np.log10(noise_power_sweep)
     # print(noise_powers)
     # print(noise_powers_db)
     symbols_received_noise_sweep = [
-            downsample_sps_x(upsample_sps_x(symbols + awgn(num_symbols, SYMBOL_POWER, osnr_db),sps),sps)
+            channel_model(symbols, SYMBOL_POWER, osnr_db, sps)
             for osnr_db in osnr_db_sweep ]
 
     bits_received_noise_sweep = [
@@ -176,7 +199,8 @@ def main():
     # print("Received Symbol Power")
     # [ print(est_symbol_power(x)) for x in symbols_received_noise_sweep ]
 
-    qpsk_esnos = [ est_symbol_qpsk_esno(x) for x in symbols_received_noise_sweep ]
+    qpsk_esnos = np.array([ est_symbol_qpsk_esno(x, True) for x in symbols_received_noise_sweep ])
+    qpsk_esnos_no_abs_correction = np.array([ est_symbol_qpsk_esno(x, False) for x in symbols_received_noise_sweep ])
     # print("Received Symbol QPSK EsNo")
     # print(qpsk_esnos)
 
@@ -189,21 +213,36 @@ def main():
 
     plt.figure()
     plt.grid()
+    plt.title("Channel SNR vs Estimated EsNo")
     plt.plot(osnr_db_sweep, noise_power_db_sweep)
     plt.plot(osnr_db_sweep, qpsk_esnos)
+    plt.plot(osnr_db_sweep, qpsk_esnos_no_abs_correction)
     plt.plot(osnr_db_sweep, tx_rx_esnos)
-    plt.legend(["True EsNo", "QPSK EsNo", "TX RX EsNo"])
+    plt.legend(["True EsNo", "QPSK EsNo", "QPSK EsNo (no abs correction)", "TX RX EsNo"])
+
+    plt.figure()
+    plt.grid()
+    plt.title("Channel SNR vs Estimated EsNo Error")
+    plt.plot(osnr_db_sweep, noise_power_db_sweep - osnr_db_sweep)
+    plt.plot(osnr_db_sweep, qpsk_esnos - osnr_db_sweep)
+    plt.plot(osnr_db_sweep, qpsk_esnos_no_abs_correction - osnr_db_sweep)
+    plt.plot(osnr_db_sweep, tx_rx_esnos - osnr_db_sweep)
+    plt.legend(["True EsNo", "QPSK EsNo", "QPSK EsNo (no abs correction)", "TX RX EsNo"])
 
     bit_error_rates_noise_sweep = [ bit_error_rate(bits,x) for x in bits_received_noise_sweep ]
     # print("Error Rates")
 
-    plt.figure()
-    plt.grid()
-    plt.semilogy(noise_power_db_sweep, bit_error_rates_noise_sweep)
+    qpsk_esnos_rms_error = np.sqrt(np.mean((qpsk_esnos-osnr_db_sweep)*(qpsk_esnos-osnr_db_sweep)))
+    qpsk_esnos_abs_error = np.mean(np.abs(qpsk_esnos-osnr_db_sweep))
 
-    plot_const(symbols, symbols_received_noise_sweep[0])
-    plot_const(symbols, symbols_received_noise_sweep[-1])
+    print(qpsk_esnos_rms_error)
+    print(qpsk_esnos_abs_error)
 
+    # plt.figure()
+    # plt.grid()
+    # plt.semilogy(noise_power_db_sweep, bit_error_rates_noise_sweep)
+
+    # plot_const(symbols, symbols_received_noise_sweep[0])
 
     plt.show()
 
