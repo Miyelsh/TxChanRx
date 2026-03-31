@@ -1,4 +1,6 @@
+import signal
 import numpy as np
+import matplotlib.pyplot as plt
 
 NUM_SYMBOLS = 2**18
 BITS_PER_SYMBOL = 2
@@ -63,7 +65,6 @@ def awgn(size, symbol_power, osnr_db):
     noise_power = symbol_power/osnr_linear
     return np.sqrt(noise_power/2)*(np.random.randn(size) + 1j*np.random.randn(size))
 
-import matplotlib.pyplot as plt
 def plot_const(symbols, symbols_received):
     figs, axs = plt.subplots(1,2)
 
@@ -175,6 +176,9 @@ def bit_error_rate(bits_tx, bits_rx):
     return np.mean(np.abs(bits_tx-bits_rx))
 
 def main():
+    signal.signal(signal.SIGINT, signal.SIG_DFL) # Make Ctrl-C actually close plots
+    plt.rcParams.update({"figure.max_open_warning" : 0}) # Disable max open warning
+
     bits = generate_bits(NUM_BITS)
 
     symbols = convert_bits_to_symbols(bits, BITS_PER_SYMBOL, SYMBOL_POWER)
