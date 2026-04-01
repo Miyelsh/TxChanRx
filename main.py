@@ -117,8 +117,8 @@ def downsample_sps_x(input, sps):
     y = input[::sps] # capture every other
     return y
 
-def channel_model(symbols, symbol_power, osnr_db, sps):
-    symbols_plus_awgn = symbols + awgn(len(symbols), symbol_power, osnr_db)
+def channel_model(symbols_tx, symbol_power, osnr_db, sps):
+    symbols_plus_awgn = symbols_tx + awgn(len(symbols_tx), symbol_power, osnr_db)
 
     return downsample_sps_x(upsample_sps_x(symbols_plus_awgn, sps), sps)
 
@@ -172,28 +172,18 @@ def est_symbol_tx_rx_esno(symbols_tx,symbols_rx):
     esno_linear = symbol_power/noise_power
     return 10*np.log10(esno_linear)
 
+def est_phase(x):
+    # returns estimated angle in range (-pi/4,pi/4)
+    x_squared = x*x
+    x_fourth = x_squared*x_squared
+    neg_mean = -np.mean(x_fourth)
+    est_angle = np.angle(neg_mean)/4
+    return est_angle
+
 def bit_error_rate(bits_tx, bits_rx):
     return np.mean(np.abs(bits_tx-bits_rx))
 
-def main():
-    signal.signal(signal.SIGINT, signal.SIG_DFL) # Make Ctrl-C actually close plots
-    plt.rcParams.update({"figure.max_open_warning" : 0}) # Disable max open warning
-
-    bits = generate_bits(NUM_BITS)
-
-    symbols = convert_bits_to_symbols(bits, BITS_PER_SYMBOL, SYMBOL_POWER)
-    # h_symbols = convert_bits_to_symbols(bits, BITS_PER_SYMBOL, SYMBOL_POWER)
-    # v_symbols = convert_bits_to_symbols(bits, BITS_PER_SYMBOL, SYMBOL_POWER)
-
-    num_symbols = len(symbols)
-
-    # print(symbols)
-    # print(symbols_received_resampled_2x)
-    # print(bits)
-    # print(bits_receieved)
-    # print(bit_errors)
-
-    sps = 1
+def test_snr_sweep(symbols, bits):
     osnr_db_sweep = np.arange(0, 20, 2)
     # osnr_db_sweep = np.arange(1)
     osnr_linear_sweep = np.pow(10, osnr_db_sweep/10.0)
@@ -201,6 +191,8 @@ def main():
     noise_power_db_sweep = -10*np.log10(noise_power_sweep)
     # print(noise_powers)
     # print(noise_powers_db)
+
+    sps = 1
     symbols_received_noise_sweep = [
             channel_model(symbols, SYMBOL_POWER, osnr_db, sps)
             for osnr_db in osnr_db_sweep ]
@@ -246,17 +238,38 @@ def main():
     bit_error_rates_noise_sweep = [ bit_error_rate(bits,x) for x in bits_received_noise_sweep ]
     # print("Error Rates")
 
-    qpsk_esnos_rms_error = np.sqrt(np.mean((qpsk_esnos-osnr_db_sweep)*(qpsk_esnos-osnr_db_sweep)))
-    qpsk_esnos_abs_error = np.mean(np.abs(qpsk_esnos-osnr_db_sweep))
-
-    print(qpsk_esnos_rms_error)
-    print(qpsk_esnos_abs_error)
+    # qpsk_esnos_rms_error = np.sqrt(np.mean((qpsk_esnos-osnr_db_sweep)*(qpsk_esnos-osnr_db_sweep)))
+    # qpsk_esnos_abs_error = np.mean(np.abs(qpsk_esnos-osnr_db_sweep))
 
     plt.figure()
     plt.grid()
     plt.semilogy(noise_power_db_sweep, bit_error_rates_noise_sweep)
 
-    # plot_const(symbols, symbols_received_noise_sweep[0])
+def test_phase_sweep(symbols):
+    phase_sweep = np.arange(-40, 40, 1)
+    symbols_received_phase_sweep = [
+            np.exp(1j*np.pi*phase/180)*channel_model(symbols, SYMBOL_POWER, 10, 1)
+            for phase in phase_sweep ]
+
+    est_phases = np.array([ est_phase(symbols) for symbols in symbols_received_phase_sweep ])
+    print(est_phases*180/np.pi)
+
+    print(est_phases*180/np.pi - phase_sweep)
+
+def main():
+    signal.signal(signal.SIGINT, signal.SIG_DFL) # Make Ctrl-C actually close plots
+    plt.rcParams.update({"figure.max_open_warning" : 0}) # Disable max open warning
+
+    bits_tx = generate_bits(NUM_BITS)
+
+    symbols_tx = convert_bits_to_symbols(bits_tx, BITS_PER_SYMBOL, SYMBOL_POWER)
+    # h_symbols = convert_bits_to_symbols(bits_tx, BITS_PER_SYMBOL, SYMBOL_POWER)
+    # v_symbols = convert_bits_to_symbols(bits_tx, BITS_PER_SYMBOL, SYMBOL_POWER)
+
+
+    test_snr_sweep(symbols_tx, bits_tx)
+
+    test_phase_sweep(symbols_tx)
 
     plt.show()
 
