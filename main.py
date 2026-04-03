@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Constants
-NUM_SYMBOLS = 2**20
+NUM_SYMBOLS = 2**16
 BITS_PER_SYMBOL = 2
 NUM_BITS = NUM_SYMBOLS*BITS_PER_SYMBOL
 SYMBOL_POWER = 1.0
@@ -122,10 +122,14 @@ def downsample_sps_x(input, sps):
     y = input[::sps] # capture every other
     return y
 
-def channel_model(symbols_tx, symbol_power, osnr_db, sps):
-    symbols_plus_awgn = symbols_tx + awgn(len(symbols_tx), symbol_power, osnr_db)
+def channel_model(h_symbols_tx, v_symbols_tx, symbol_power, osnr_db, sps):
+    h_symbols_plus_awgn = h_symbols_tx + awgn(len(h_symbols_tx), symbol_power, osnr_db)
+    v_symbols_plus_awgn = v_symbols_tx + awgn(len(v_symbols_tx), symbol_power, osnr_db)
 
-    return downsample_sps_x(upsample_sps_x(symbols_plus_awgn, sps), sps)
+    h_symbols_resampled = downsample_sps_x(upsample_sps_x(h_symbols_plus_awgn, sps), sps)
+    v_symbols_resampled = downsample_sps_x(upsample_sps_x(v_symbols_plus_awgn, sps), sps)
+
+    return (h_symbols_resampled, v_symbols_resampled)
 
 def est_symbol_power(x):
     return np.mean(np.abs(x*np.conj(x)))
@@ -188,82 +192,105 @@ def est_phase(x):
 def bit_error_rate(bits_tx, bits_rx):
     return np.mean(np.abs(bits_tx-bits_rx))
 
-def test_snr_sweep(bits_tx, symbols_tx):
-    snr_db_sweep = np.arange(0, 20, 2)
+def test_snr_sweep(h_bits_tx, v_bits_tx, h_symbols_tx, v_symbols_tx,):
+    snr_db_sweep = np.arange(-20, 20, 2)
 
-    symbols_rx_noise_sweep = [
-            channel_model(symbols_tx, SYMBOL_POWER, snr_db, CHANNEL_SPS)
-            for snr_db in snr_db_sweep ]
+    h_symbols_rx_noise_sweep = np.zeros([len(snr_db_sweep), len(h_symbols_tx)], dtype=complex)
+    v_symbols_rx_noise_sweep = np.zeros([len(snr_db_sweep), len(v_symbols_tx)], dtype=complex)
+    for snr_idx in range(len(snr_db_sweep)):
+        snr_db = snr_db_sweep[snr_idx]
+        (h_symbols_rx_noise_sweep[snr_idx], v_symbols_rx_noise_sweep[snr_idx]) = channel_model(h_symbols_tx, v_symbols_tx, SYMBOL_POWER, snr_db, CHANNEL_SPS)
 
-    plot_sweep(bits_tx, symbols_tx, symbols_rx_noise_sweep, snr_db_sweep, "Channel SNR (dB)")
+    plot_sweep(h_bits_tx, v_bits_tx, h_symbols_tx, v_symbols_tx, h_symbols_rx_noise_sweep, v_symbols_rx_noise_sweep, snr_db_sweep, "Channel SNR (dB)")
 
-def test_phase_sweep(bits_tx, symbols_tx):
+def test_phase_sweep(h_bits_tx, v_bits_tx, h_symbols_tx, v_symbols_tx,):
     phase_sweep = np.arange(0, 360, 10)
 
-    symbols_rx_phase_sweep = [
-            np.exp(1j*np.pi*phase/180)*channel_model(symbols_tx, SYMBOL_POWER, CHANNEL_SNR_DB, CHANNEL_SPS)
-            for phase in phase_sweep ]
+    h_symbols_rx_phase_sweep = np.zeros([len(phase_sweep), len(h_symbols_tx)], dtype=complex)
+    v_symbols_rx_phase_sweep = np.zeros([len(phase_sweep), len(v_symbols_tx)], dtype=complex)
+    for phase_idx in range(len(phase_sweep)):
+        phase = phase_sweep[phase_idx]
+        (h_symbols_rx_phase_sweep[phase_idx], v_symbols_rx_phase_sweep[phase_idx]) = channel_model(h_symbols_tx, v_symbols_tx, SYMBOL_POWER, CHANNEL_SNR_DB, CHANNEL_SPS)
+        h_symbols_rx_phase_sweep[phase_idx] *= np.exp(1j*np.pi*phase/180)
+        v_symbols_rx_phase_sweep[phase_idx] *= np.exp(1j*np.pi*phase/180)
 
-    est_phases = np.array([ est_phase(symbols) for symbols in symbols_rx_phase_sweep ])
-    print(est_phases*180/np.pi)
-    print(est_phases*180/np.pi - phase_sweep)
+    h_est_phases = np.array([ est_phase(symbols) for symbols in h_symbols_rx_phase_sweep ])
+    print("Estimated H-Pol Phases")
+    print(h_est_phases*180/np.pi)
+    print("H-Pol Phase Error")
+    print(h_est_phases*180/np.pi - phase_sweep)
 
-    plot_sweep(bits_tx, symbols_tx, symbols_rx_phase_sweep, phase_sweep, "Phase Offset (degrees)")
+    plot_sweep(h_bits_tx, v_bits_tx, h_symbols_tx, v_symbols_tx, h_symbols_rx_phase_sweep, v_symbols_rx_phase_sweep, phase_sweep, "Phase Offset (degrees)")
 
 
-def plot_sweep(bits_tx, symbols_tx, symbols_rx_sweep, sweep_params, sweep_param_name):
+def plot_sweep(h_bits_tx, v_bits_tx, h_symbols_tx, v_symbols_tx, h_symbols_rx_sweep, v_symbols_rx_sweep, sweep_params, sweep_param_name):
 
-    bits_received_noise_sweep = [
+    h_bits_received_noise_sweep = [
             convert_symbols_to_bits(x, BITS_PER_SYMBOL, NUM_SYMBOLS)
-            for x in symbols_rx_sweep ]
+            for x in h_symbols_rx_sweep ]
+    v_bits_received_noise_sweep = [
+            convert_symbols_to_bits(x, BITS_PER_SYMBOL, NUM_SYMBOLS)
+            for x in v_symbols_rx_sweep ]
 
-    # print("Received Symbol Power")
-    # [ print(est_symbol_power(x)) for x in symbols_rx_sweep ]
+    h_qpsk_esnos = np.array([ est_symbol_qpsk_esno(x, True) for x in h_symbols_rx_sweep ])
+    v_qpsk_esnos = np.array([ est_symbol_qpsk_esno(x, True) for x in v_symbols_rx_sweep ])
+    average_qpsk_esnos = (np.array(h_qpsk_esnos) + np.array(v_qpsk_esnos))/2.0
 
-    qpsk_esnos = np.array([ est_symbol_qpsk_esno(x, True) for x in symbols_rx_sweep ])
-    qpsk_esnos_no_abs_correction = np.array([ est_symbol_qpsk_esno(x, False) for x in symbols_rx_sweep ])
-    # print("Received Symbol QPSK EsNo")
-    # print(qpsk_esnos)
+    h_qpsk_esnos_no_abs_correction = np.array([ est_symbol_qpsk_esno(x, False) for x in h_symbols_rx_sweep ])
+    v_qpsk_esnos_no_abs_correction = np.array([ est_symbol_qpsk_esno(x, False) for x in v_symbols_rx_sweep ])
+    average_qpsk_esnos_no_abs_correction = (np.array(h_qpsk_esnos_no_abs_correction) + np.array(v_qpsk_esnos_no_abs_correction))/2.0
 
-    radial_esnos = np.array([ est_symbol_radial_esno(x) for x in symbols_rx_sweep ])
+    h_radial_esnos = np.array([ est_symbol_radial_esno(x) for x in h_symbols_rx_sweep ])
+    v_radial_esnos = np.array([ est_symbol_radial_esno(x) for x in v_symbols_rx_sweep ])
+    average_radial_esnos = (np.array(h_radial_esnos) + np.array(v_radial_esnos))/2.0
 
-    tx_rx_esnos = [ est_symbol_tx_rx_esno(symbols_tx,x) for x in symbols_rx_sweep ]
-    # print("Received Symbol TX RX EsNo")
-    # print(tx_rx_esnos)
+    h_tx_rx_esnos = [ est_symbol_tx_rx_esno(h_symbols_tx,x) for x in h_symbols_rx_sweep ]
+    v_tx_rx_esnos = [ est_symbol_tx_rx_esno(v_symbols_tx,x) for x in v_symbols_rx_sweep ]
+    average_tx_rx_esnos = (np.array(h_tx_rx_esnos) + np.array(v_tx_rx_esnos))/2.0
 
     plt.figure()
     plt.grid()
     plt.title(f"{sweep_param_name} vs Estimated EsNo (dB)")
     # plt.plot(sweep_params, sweep_params)
-    plt.plot(sweep_params, qpsk_esnos)
-    plt.plot(sweep_params, qpsk_esnos_no_abs_correction)
-    plt.plot(sweep_params, radial_esnos)
-    plt.plot(sweep_params, tx_rx_esnos)
+    plt.plot(sweep_params, average_qpsk_esnos)
+    plt.plot(sweep_params, average_qpsk_esnos_no_abs_correction)
+    plt.plot(sweep_params, average_radial_esnos)
+    plt.plot(sweep_params, average_tx_rx_esnos)
+    plt.xlabel(sweep_param_name)
     plt.legend(["QPSK EsNo", "QPSK EsNo (no abs correction)", "Radial EsNo", "TX RX EsNo"])
     # plt.legend(["True EsNo", "QPSK EsNo", "QPSK EsNo (no abs correction)", "Radial EsNo", "TX RX EsNo"])
 
     plt.figure()
     plt.grid()
     plt.title(f"{sweep_param_name} vs Estimated EsNo - TX/RX EsNo (dB)")
-    plt.plot(sweep_params, qpsk_esnos - tx_rx_esnos)
-    plt.plot(sweep_params, qpsk_esnos_no_abs_correction - tx_rx_esnos)
-    plt.plot(sweep_params, radial_esnos - tx_rx_esnos)
+    plt.plot(sweep_params, average_qpsk_esnos - average_tx_rx_esnos)
+    plt.plot(sweep_params, average_qpsk_esnos_no_abs_correction - average_tx_rx_esnos)
+    plt.plot(sweep_params, average_radial_esnos - average_tx_rx_esnos)
+    plt.xlabel(sweep_param_name)
     plt.legend(["QPSK EsNo", "QPSK EsNo (no abs correction)", "Radial EsNo", "TX/RX EsNo"])
 
-    bit_error_rates = [ bit_error_rate(bits_tx,x) for x in bits_received_noise_sweep ]
+    h_bit_error_rates = [ bit_error_rate(h_bits_tx,x) for x in h_bits_received_noise_sweep ]
+    v_bit_error_rates = [ bit_error_rate(v_bits_tx,x) for x in v_bits_received_noise_sweep ]
+    average_bit_error_rates = (np.array(h_bit_error_rates) + np.array(v_bit_error_rates))/2.0
 
     plt.figure()
     plt.grid()
     plt.title(f"{sweep_param_name} vs Bit Error Rate")
-    plt.semilogy(sweep_params, bit_error_rates)
+    plt.semilogy(sweep_params, h_bit_error_rates)
+    plt.semilogy(sweep_params, v_bit_error_rates)
+    plt.semilogy(sweep_params, average_bit_error_rates)
+    plt.xlabel(sweep_param_name)
+    plt.legend(["H-Pol Bit Error Rate", "V-Pol Bit Error Rate", "Average Bit Error Rate"])
 
 def main():
-    bits_tx    = generate_bits(NUM_BITS)
-    symbols_tx = convert_bits_to_symbols(bits_tx, BITS_PER_SYMBOL, SYMBOL_POWER)
+    h_bits_tx    = generate_bits(NUM_BITS)
+    v_bits_tx    = generate_bits(NUM_BITS)
+    h_symbols_tx = convert_bits_to_symbols(h_bits_tx, BITS_PER_SYMBOL, SYMBOL_POWER)
+    v_symbols_tx = convert_bits_to_symbols(v_bits_tx, BITS_PER_SYMBOL, SYMBOL_POWER)
 
-    test_snr_sweep(bits_tx, symbols_tx)
+    test_snr_sweep(h_bits_tx, v_bits_tx, h_symbols_tx, v_symbols_tx)
 
-    test_phase_sweep(bits_tx, symbols_tx)
+    test_phase_sweep(h_bits_tx, v_bits_tx, h_symbols_tx, v_symbols_tx)
 
     plt.show()
 
