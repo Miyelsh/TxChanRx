@@ -122,9 +122,11 @@ def downsample_sps_x(input, sps):
     y = input[::sps] # capture every other
     return y
 
-def channel_model(h_symbols_tx, v_symbols_tx, filter, symbol_power, osnr_db, sps):
-    h_symbols_filtered = np.convolve(h_symbols_tx, filter, mode="same")
-    v_symbols_filtered = np.convolve(v_symbols_tx, filter, mode="same")
+def channel_model(h_symbols_tx, v_symbols_tx, h2h_filter, h2v_filter, v2h_filter, v2v_filter, symbol_power, osnr_db, sps):
+    h_symbols_filtered  = np.convolve(h_symbols_tx, h2h_filter, mode="same")
+    h_symbols_filtered += np.convolve(v_symbols_tx, v2h_filter, mode="same")
+    v_symbols_filtered  = np.convolve(v_symbols_tx, v2v_filter, mode="same")
+    v_symbols_filtered += np.convolve(h_symbols_tx, h2v_filter, mode="same")
 
     h_symbols_plus_awgn = h_symbols_filtered + awgn(len(h_symbols_tx), symbol_power, osnr_db)
     v_symbols_plus_awgn = v_symbols_filtered + awgn(len(v_symbols_tx), symbol_power, osnr_db)
@@ -200,11 +202,14 @@ def test_snr_sweep(h_bits_tx, v_bits_tx, h_symbols_tx, v_symbols_tx,):
 
     h_symbols_rx_noise_sweep = np.zeros([len(snr_db_sweep), len(h_symbols_tx)], dtype=complex)
     v_symbols_rx_noise_sweep = np.zeros([len(snr_db_sweep), len(v_symbols_tx)], dtype=complex)
-    all_pass_filter = np.array([0,0,0,1,0,0,0,0])
+    h2h_filter = np.array([0,0,0,1,0,0,0,0])
+    h2v_filter = np.array([0,0,0,0,0,0,0,0])
+    v2h_filter = np.array([0,0,0,0,0,0,0,0])
+    v2v_filter = np.array([0,0,0,1,0,0,0,0])
     # all_pass_filter = np.array([1])
     for snr_idx in range(len(snr_db_sweep)):
         snr_db = snr_db_sweep[snr_idx]
-        (h_symbols_rx_noise_sweep[snr_idx], v_symbols_rx_noise_sweep[snr_idx]) = channel_model(h_symbols_tx, v_symbols_tx, all_pass_filter, SYMBOL_POWER, snr_db, CHANNEL_SPS)
+        (h_symbols_rx_noise_sweep[snr_idx], v_symbols_rx_noise_sweep[snr_idx]) = channel_model(h_symbols_tx, v_symbols_tx, h2h_filter, h2v_filter, v2h_filter, v2v_filter, SYMBOL_POWER, snr_db, CHANNEL_SPS)
 
     plot_sweep(h_bits_tx, v_bits_tx, h_symbols_tx, v_symbols_tx, h_symbols_rx_noise_sweep, v_symbols_rx_noise_sweep, snr_db_sweep, "Channel SNR (dB)")
 
@@ -213,10 +218,13 @@ def test_phase_sweep(h_bits_tx, v_bits_tx, h_symbols_tx, v_symbols_tx,):
 
     h_symbols_rx_phase_sweep = np.zeros([len(phase_sweep), len(h_symbols_tx)], dtype=complex)
     v_symbols_rx_phase_sweep = np.zeros([len(phase_sweep), len(v_symbols_tx)], dtype=complex)
-    all_pass_filter = np.array([0,0,0,1,0,0,0,0])
+    h2h_filter = np.array([0,0,0,1,0,0,0,0])
+    h2v_filter = np.array([0,0,0,0,0,0,0,0])
+    v2h_filter = np.array([0,0,0,0,0,0,0,0])
+    v2v_filter = np.array([0,0,0,1,0,0,0,0])
     for phase_idx in range(len(phase_sweep)):
         phase = phase_sweep[phase_idx]
-        (h_symbols_rx_phase_sweep[phase_idx], v_symbols_rx_phase_sweep[phase_idx]) = channel_model(h_symbols_tx, v_symbols_tx, all_pass_filter, SYMBOL_POWER, CHANNEL_SNR_DB, CHANNEL_SPS)
+        (h_symbols_rx_phase_sweep[phase_idx], v_symbols_rx_phase_sweep[phase_idx]) = channel_model(h_symbols_tx, v_symbols_tx, h2h_filter, h2v_filter, v2h_filter, v2v_filter, SYMBOL_POWER, CHANNEL_SNR_DB, CHANNEL_SPS)
         h_symbols_rx_phase_sweep[phase_idx] *= np.exp(1j*np.pi*phase/180)
         v_symbols_rx_phase_sweep[phase_idx] *= np.exp(1j*np.pi*phase/180)
 
