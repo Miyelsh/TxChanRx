@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import math
+import dpae
 import helper_functions
 
 matplotlib.rcParams.update({"axes.grid" : True})
@@ -332,7 +333,7 @@ def zero_pad(array,length_after_padding,equal_left_right=False):
     else:
         return np.pad(array, (0,length_after_padding-len(array)))
 
-def test_snr_sweep(random_seed=1234,num_symbols=2**16,num_chan_filter_coefs=8,num_eq_filter_coefs=1024,chan_filter_noise_power=0.1):
+def test_snr_sweep(random_seed=1234,num_symbols=2**16,num_chan_filter_coefs=8,num_eq_filter_coefs=1024,chan_filter_noise_power=0.1, test_dpae=True):
     np.random.seed(random_seed)
 
     snr_db_sweep = np.arange(-5, 30, 1)
@@ -365,21 +366,21 @@ def test_snr_sweep(random_seed=1234,num_symbols=2**16,num_chan_filter_coefs=8,nu
     v2v_filter = v2v_filter + filter_rand_scale*(    np.random.randn(len(v2v_filter))
                                                 + 1j*np.random.randn(len(v2v_filter)))
 
-    fig,axs = plt.subplots(2,2)
-    plt.suptitle("Channel Filter Coefficients")
-    axs[0][0].set_title("h2h_filter")
-    axs[0][0].plot(h2h_filter.real)
-    axs[0][0].plot(h2h_filter.imag)
-    axs[0][1].set_title("v2h_filter")
-    axs[0][1].plot(v2h_filter.real)
-    axs[0][1].plot(v2h_filter.imag)
-    axs[1][0].set_title("h2v_filter")
-    axs[1][0].plot(h2v_filter.real)
-    axs[1][0].plot(h2v_filter.imag)
-    axs[1][1].set_title("v2v_filter")
-    axs[1][1].plot(v2v_filter.real)
-    axs[1][1].plot(v2v_filter.imag)
-    plt.tight_layout()
+    # fig,axs = plt.subplots(2,2)
+    # plt.suptitle("Channel Filter Coefficients")
+    # axs[0][0].set_title("h2h_filter")
+    # axs[0][0].plot(h2h_filter.real)
+    # axs[0][0].plot(h2h_filter.imag)
+    # axs[0][1].set_title("v2h_filter")
+    # axs[0][1].plot(v2h_filter.real)
+    # axs[0][1].plot(v2h_filter.imag)
+    # axs[1][0].set_title("h2v_filter")
+    # axs[1][0].plot(h2v_filter.real)
+    # axs[1][0].plot(h2v_filter.imag)
+    # axs[1][1].set_title("v2v_filter")
+    # axs[1][1].plot(v2v_filter.real)
+    # axs[1][1].plot(v2v_filter.imag)
+    # plt.tight_layout()
 
     h2h_filter = zero_pad(h2h_filter, num_eq_filter_coefs, True)
     h2v_filter = zero_pad(h2v_filter, num_eq_filter_coefs, True)
@@ -416,6 +417,14 @@ def test_snr_sweep(random_seed=1234,num_symbols=2**16,num_chan_filter_coefs=8,nu
                                  h2h_filter_normalized, h2v_filter_normalized,
                                  v2h_filter_normalized, v2v_filter_normalized )
 
+    (h_symbols_dpae_rx_noise_sweep, v_symbols_dpae_rx_noise_sweep) = (np.zeros((1,1)),np.zeros((1,1)))
+    if (test_dpae):
+        (h_symbols_dpae_rx_noise_sweep,
+         v_symbols_dpae_rx_noise_sweep) = \
+                 dpae.compute_dpae(h_symbols_rx_noise_sweep,
+                                   v_symbols_rx_noise_sweep,
+                                   num_eq_filter_coefs)
+
     # print(h_symbols_tx)
     # print(h_symbols_rx_noise_sweep[-1])
     # print(h_symbols_inverted_rx_noise_sweep[-1][-32:])
@@ -429,9 +438,12 @@ def test_snr_sweep(random_seed=1234,num_symbols=2**16,num_chan_filter_coefs=8,nu
     v_symbols_rx_noise_sweep_trimmed = v_symbols_rx_noise_sweep[:,num_eq_filter_coefs:-num_eq_filter_coefs] 
     h_symbols_inverted_rx_noise_sweep_trimmed = h_symbols_inverted_rx_noise_sweep[:,num_eq_filter_coefs:-num_eq_filter_coefs] 
     v_symbols_inverted_rx_noise_sweep_trimmed = v_symbols_inverted_rx_noise_sweep[:,num_eq_filter_coefs:-num_eq_filter_coefs] 
+    h_symbols_dpae_rx_noise_sweep_trimmed = h_symbols_dpae_rx_noise_sweep[:,num_eq_filter_coefs:-num_eq_filter_coefs] 
+    v_symbols_dpae_rx_noise_sweep_trimmed = v_symbols_dpae_rx_noise_sweep[:,num_eq_filter_coefs:-num_eq_filter_coefs] 
 
     plot_const(h_symbols_tx, h_symbols_rx_noise_sweep_trimmed[-1], "Constellation before equalization")
     plot_const(h_symbols_tx, h_symbols_inverted_rx_noise_sweep_trimmed[-1], "Constellation after equalization")
+    plot_const(h_symbols_tx, h_symbols_dpae_rx_noise_sweep_trimmed[-1], "Constellation after DPAE")
 
     fig, axs = plt.subplots(3,2)
     plt.suptitle("H-Pol TX and RX Spectrum (dB), relative frequency [-pi,pi]")
@@ -465,6 +477,7 @@ def test_snr_sweep(random_seed=1234,num_symbols=2**16,num_chan_filter_coefs=8,nu
 
     plot_sweep(h_bits_tx_trimmed, v_bits_tx_trimmed, h_symbols_tx_trimmed, v_symbols_tx_trimmed, h_symbols_rx_noise_sweep_trimmed, v_symbols_rx_noise_sweep_trimmed, snr_db_sweep, "Before Equalization: Channel SNR (dB)")
     plot_sweep(h_bits_tx_trimmed, v_bits_tx_trimmed, h_symbols_tx_trimmed, v_symbols_tx_trimmed, h_symbols_inverted_rx_noise_sweep_trimmed, v_symbols_inverted_rx_noise_sweep_trimmed, snr_db_sweep, "After Equalization: Channel SNR (dB)")
+    plot_sweep(h_bits_tx_trimmed, v_bits_tx_trimmed, h_symbols_tx_trimmed, v_symbols_tx_trimmed, h_symbols_dpae_rx_noise_sweep_trimmed, v_symbols_dpae_rx_noise_sweep_trimmed, snr_db_sweep, "After DPAE: Channel SNR (dB)")
 
 def test_phase_sweep(h_bits_tx, v_bits_tx, h_symbols_tx, v_symbols_tx,):
     phase_sweep = np.arange(0, 360, 10)
@@ -578,7 +591,7 @@ def plot_sweep(h_bits_tx, v_bits_tx, h_symbols_tx, v_symbols_tx, h_symbols_rx_sw
     plt.legend(["Theoretical QPSK Bit Error Rate", "H-Pol Bit Error Rate", "V-Pol Bit Error Rate", "Average of H-Pol and V-Pol Bit Error Rate"])
 
 def main():
-    test_snr_sweep(random_seed=4,num_symbols=2**16,num_chan_filter_coefs=8,num_eq_filter_coefs=64,chan_filter_noise_power=0.0)
+    test_snr_sweep(random_seed=4,num_symbols=2**20,num_chan_filter_coefs=1,num_eq_filter_coefs=1,chan_filter_noise_power=1.00, test_dpae=True)
 
     # test_phase_sweep(h_bits_tx, v_bits_tx, h_symbols_tx, v_symbols_tx)
 
