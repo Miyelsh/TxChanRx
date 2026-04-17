@@ -69,14 +69,18 @@ def clipped_power(x):
     power = np.abs(x*x.conj())
     # print(power)
     # breakpoint()
-    if power > 2.5:
-        return +1
-    elif power < 1.5:
+    if power > 2.1:
         return -1
+    elif power < 1.9:
+        return +1
     else:
         return 0
 
-def compute_invert_filters(h_symbols, v_symbols, num_eq_filter_coefs):
+def compute_invert_filters(h_symbols, v_symbols, num_eq_filter_coefs,
+                                                   h2h_filter_inverted,
+                                                   h2v_filter_inverted,
+                                                   v2h_filter_inverted,
+                                                   v2v_filter_inverted):
     h2h = np.zeros(num_eq_filter_coefs, dtype=complex)
     h2v = np.zeros(num_eq_filter_coefs, dtype=complex)
     v2h = np.zeros(num_eq_filter_coefs, dtype=complex)
@@ -86,6 +90,11 @@ def compute_invert_filters(h_symbols, v_symbols, num_eq_filter_coefs):
     h2h[num_eq_filter_coefs//2-1] = 1.0
     v2v[num_eq_filter_coefs//2-1] = 1.0
 
+    h2h = h2h_filter_inverted
+    h2v = h2v_filter_inverted
+    v2h = v2h_filter_inverted
+    v2v = v2v_filter_inverted
+
     if (len(h_symbols) != len(v_symbols)):
         print("ERROR: h_symbols and v_symbols must be same length!")
         exit(1)
@@ -94,9 +103,12 @@ def compute_invert_filters(h_symbols, v_symbols, num_eq_filter_coefs):
     h_symbols_filtered = np.zeros(num_symbols, dtype=complex)
     v_symbols_filtered = np.zeros(num_symbols, dtype=complex)
 
+    h_symbols_filtered = np.zeros(num_symbols, dtype=complex)
+    v_symbols_filtered = np.zeros(num_symbols, dtype=complex)
+
     # Convolve symbols with 
     N = num_eq_filter_coefs - 1
-    mu = 0.0005
+    mu = 0.00001
 
     for t in range(num_symbols-num_eq_filter_coefs):
         h_in = h_symbols[t:t+num_eq_filter_coefs]
@@ -106,6 +118,40 @@ def compute_invert_filters(h_symbols, v_symbols, num_eq_filter_coefs):
         h_out += np.convolve(v_in, v2h, mode="valid")[0]
         v_out  = np.convolve(v_in, v2v, mode="valid")[0]
         v_out += np.convolve(h_in, h2v, mode="valid")[0]
+
+        # Save filtered symbols
+        h_symbols_filtered[t] = h_out
+        v_symbols_filtered[t] = v_out
+
+        # Add tap error terms to existing filters
+        if (t%10000 == 256):
+            # print(f"h2h_power = {helper_functions.est_symbol_power(h2h)}")
+            # print(f"h2v_power = {helper_functions.est_symbol_power(h2v)}")
+            # print(f"v2h_power = {helper_functions.est_symbol_power(v2h)}")
+            # print(f"v2v_power = {helper_functions.est_symbol_power(v2v)}")
+            print(f"h2h = {h2h}")
+            print(f"h2v = {h2v}")
+            print(f"v2h = {v2h}")
+            print(f"v2v = {v2v}")
+            # print(f"h2h.shape = {h2h.shape}")
+            fig,axs = plt.subplots(1,2)
+            axs[0].set_title(f"v_out[{t-256}:{t}]")
+            axs[0].scatter(v_symbols_filtered[t-256:t].real, v_symbols_filtered[t-256:t].imag)
+            axs[0].set_aspect("equal", "box")
+            # axs[0].plot(h2h.real)
+            # axs[0].plot(h2h.imag)
+            axs[1].set_title(f"h_out[{t-256}:{t}]")
+            axs[1].set_aspect("equal", "box")
+            axs[1].scatter(h_symbols_filtered[t-256:t].real, h_symbols_filtered[t-256:t].imag)
+            radial_power = helper_functions.est_symbol_power(h_symbols_filtered[t-256:t])
+            radial_esno = helper_functions.est_symbol_radial_esno(h_symbols_filtered[t-256:t])
+            print(f"radial_esno = {radial_esno}")
+            print(f"radial_power = {radial_power}")
+
+            plt.show()
+
+        if t < 256:
+            continue
     
         for n in range(num_eq_filter_coefs):
             # hi2hi_error[n]   = clipped_power(h_out[t])
@@ -133,54 +179,43 @@ def compute_invert_filters(h_symbols, v_symbols, num_eq_filter_coefs):
             #                * v_in[t-n+N]
             # v2v_updated[n] = v2v[n] + v2v_error*mu
 
-            h2h_error = clipped_power(h_out) * h_out * h_in[N-n]
+            h2h_error = clipped_power(h_out) * h_out.conj() * h_in[N-n]
             # print(f"h2h_power = {clipped_power(h_out)}")
             # print(f"h2h_error = {h2h_error}")
+            # print(f"h_in = {h_in[0]}")
+            # print(f"h_out = {h_out}")
+            # print(f"h_in*h_out.conj() = {h_in*h_out.conj()}")
             h2h[n]    = h2h[n] + h2h_error*mu
 
-            h2v_error = clipped_power(v_out) * v_out * h_in[N-n]
+            h2v_error = clipped_power(v_out) * v_out.conj() * h_in[N-n]
             h2v[n]    = h2v[n] + h2v_error*mu
+            # print(f"h2v_error = {h2v_error}")
+            # print(f"h_in = {h_in[0]}")
+            # print(f"v_out = {v_out}")
+            # print(f"h_in*v_out.conj() = {h_in*v_out.conj()}")
 
-            v2h_error = clipped_power(h_out) * h_out * v_in[N-n]
+            v2h_error = clipped_power(h_out) * h_out.conj() * v_in[N-n]
             v2h[n]    = v2h[n] + v2h_error*mu
 
-            v2v_error = clipped_power(v_out) * v_out * v_in[N-n]
+            v2v_error = clipped_power(v_out) * v_out.conj() * v_in[N-n]
             v2v[n]    = v2v[n] + v2v_error*mu
+        # breakpoint()
 
         # Update CMA error IIR
 
         # Compute tap error terms
 
-
-        # Save filtered symbols
-        h_symbols_filtered[t] = h_out
-        v_symbols_filtered[t] = v_out
-
-        # Add tap error terms to existing filters
-        if (t%10000 == 0):
-            print(f"h2h = {h2h}")
-            print(f"h2v = {h2v}")
-            print(f"v2h = {v2h}")
-            print(f"v2v = {v2v}")
-            # print(f"h2h.shape = {h2h.shape}")
-            fig,axs = plt.subplots(1,2)
-            axs[0].set_title(f"h2h[{t}]")
-            axs[0].plot(h2h.real)
-            axs[0].plot(h2h.imag)
-            axs[1].set_title(f"h2h_out[{t-256}:{t}]")
-            axs[1].set_aspect("equal", "box")
-            axs[1].scatter(h_symbols_filtered[t-256:t].real, h_symbols_filtered[t-256:t].imag)
-            radial_esno = helper_functions.est_symbol_radial_esno(h_symbols_filtered[t-256:t])
-            print(f"radial_esno = {radial_esno}")
-
-            plt.show()
         
     return (h2h,
             h2v,
             v2h,
             v2v)
 
-def compute_dpae(h_symbols, v_symbols, num_eq_filter_coefs):
+def compute_dpae(h_symbols, v_symbols, num_eq_filter_coefs
+                                     , h2h_filter_inverted
+                                     , h2v_filter_inverted
+                                     , v2h_filter_inverted
+                 , v2v_filter_inverted ):
     # (h2h_filter_inverted,
     #  h2v_filter_inverted,
     #  v2h_filter_inverted,
@@ -195,10 +230,12 @@ def compute_dpae(h_symbols, v_symbols, num_eq_filter_coefs):
      v2h_filter_inverted,
      v2v_filter_inverted) = compute_invert_filters(h_symbols[-1],
                                                    v_symbols[-1],
-                                                   num_eq_filter_coefs)
-
-
-    # fig,axs = plt.subplots(2,2)
+                                                   num_eq_filter_coefs,
+                                                   h2h_filter_inverted,
+                                                   h2v_filter_inverted,
+                                                   v2h_filter_inverted,
+                                                   v2v_filter_inverted)
+    # fig,axs = plt.subplots(2,2)                  
     # plt.suptitle("Inverted Filter Coefficients")
     # axs[0][0].set_title("h2h_filter_inverted")
     # axs[0][0].plot(h2h_filter_inverted.real)

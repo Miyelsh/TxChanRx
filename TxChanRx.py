@@ -273,6 +273,10 @@ def equalize_rx_symbols(h_symbols, v_symbols, h2h_filter, h2v_filter, v2h_filter
     print(f"h2v_filter_inverted = {h2v_filter_inverted}")
     print(f"v2h_filter_inverted = {v2h_filter_inverted}")
     print(f"v2v_filter_inverted = {v2v_filter_inverted}")
+    print(f"h2h_filter_inverted_power = {helper_functions.est_symbol_power(h2h_filter_inverted)}")
+    print(f"h2v_filter_inverted_power = {helper_functions.est_symbol_power(h2v_filter_inverted)}")
+    print(f"v2h_filter_inverted_power = {helper_functions.est_symbol_power(v2h_filter_inverted)}")
+    print(f"v2v_filter_inverted_power = {helper_functions.est_symbol_power(v2v_filter_inverted)}")
 
     # fig,axs = plt.subplots(2,2)
     # plt.suptitle("Inverted Filter Coefficients")
@@ -355,6 +359,8 @@ def test_snr_sweep(random_seed=1234,num_symbols=2**16,num_chan_filter_coefs=8,nu
     # Set middle coefficient to 1, making an all-pass filter
     h2h_filter[num_chan_filter_coefs//2-1] = 1
     v2v_filter[num_chan_filter_coefs//2-1] = 1
+    # h2v_filter[num_chan_filter_coefs//2-1] = 1
+    # v2h_filter[num_chan_filter_coefs//2-1] = 1
 
     filter_rand_scale = np.sqrt(chan_filter_noise_power/2)
     h2h_filter = h2h_filter + filter_rand_scale*(    np.random.randn(len(h2h_filter))
@@ -419,11 +425,23 @@ def test_snr_sweep(random_seed=1234,num_symbols=2**16,num_chan_filter_coefs=8,nu
 
     (h_symbols_dpae_rx_noise_sweep, v_symbols_dpae_rx_noise_sweep) = (np.zeros((1,1)),np.zeros((1,1)))
     if (test_dpae):
+        (h2h_filter_inverted,
+         h2v_filter_inverted,
+         v2h_filter_inverted,
+         v2v_filter_inverted) = invert_filters( h2h_filter_normalized
+                                              , h2v_filter_normalized
+                                              , v2h_filter_normalized
+                                              , v2v_filter_normalized )
+
         (h_symbols_dpae_rx_noise_sweep,
          v_symbols_dpae_rx_noise_sweep) = \
                  dpae.compute_dpae(h_symbols_rx_noise_sweep,
                                    v_symbols_rx_noise_sweep,
-                                   num_eq_filter_coefs)
+                                   num_eq_filter_coefs
+                                   , h2h_filter_inverted
+                                   , h2v_filter_inverted
+                                   , v2h_filter_inverted
+                                   , v2v_filter_inverted )
 
     # print(h_symbols_tx)
     # print(h_symbols_rx_noise_sweep[-1])
