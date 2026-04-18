@@ -2,68 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import helper_functions
 
-def equalize_rx_symbols(h_symbols, v_symbols, h2h_filter, h2v_filter, v2h_filter, v2v_filter):
-    (h2h_filter_inverted,
-     h2v_filter_inverted,
-     v2h_filter_inverted,
-     v2v_filter_inverted) = invert_filters( h2h_filter
-                                          , h2v_filter
-                                          , v2h_filter
-                                          , v2v_filter )
-
-    fig,axs = plt.subplots(2,2)
-    plt.suptitle("Inverted Filter Coefficients")
-    axs[0][0].set_title("h2h_filter_inverted")
-    axs[0][0].plot(h2h_filter_inverted.real)
-    axs[0][0].plot(h2h_filter_inverted.imag)
-    axs[0][1].set_title("v2h_filter_inverted")
-    axs[0][1].plot(v2h_filter_inverted.real)
-    axs[0][1].plot(v2h_filter_inverted.imag)
-    axs[1][0].set_title("h2v_filter_inverted")
-    axs[1][0].plot(h2v_filter_inverted.real)
-    axs[1][0].plot(h2v_filter_inverted.imag)
-    axs[1][1].set_title("v2v_filter_inverted")
-    axs[1][1].plot(v2v_filter_inverted.real)
-    axs[1][1].plot(v2v_filter_inverted.imag)
-    plt.tight_layout()
-
-    fig,axs = plt.subplots(2,2)
-    plt.suptitle("Channel Filter Spectrum (dB), relative frequency [-pi,pi]")
-    x = np.linspace(-np.pi,np.pi,len(h2h_filter_inverted))
-    axs[0][0].set_title("H2H")
-    axs[0][0].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h2h_filter))))
-    axs[0][1].set_title("V2H")
-    axs[0][1].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(v2h_filter))))
-    axs[1][0].set_title("H2V")
-    axs[1][0].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h2v_filter))))
-    axs[1][1].set_title("V2V")
-    axs[1][1].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(v2v_filter))))
-    plt.tight_layout()
-
-    fig,axs = plt.subplots(2,2)
-    plt.suptitle("Inverted Filter Spectrum (dB), relative frequency [-pi,pi]")
-    x = np.linspace(-np.pi,np.pi,len(h2h_filter_inverted))
-    axs[0][0].set_title("H2H_inv")
-    axs[0][0].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h2h_filter_inverted))))
-    axs[0][1].set_title("V2H_inv")
-    axs[0][1].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(v2h_filter_inverted))))
-    axs[1][0].set_title("H2V_inv")
-    axs[1][0].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h2v_filter_inverted))))
-    axs[1][1].set_title("V2V_inv")
-    axs[1][1].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(v2v_filter_inverted))))
-    plt.tight_layout()
-
-    h_symbols_inverted = np.zeros([len(h_symbols), len(h_symbols[0])], dtype=complex)
-    v_symbols_inverted = np.zeros([len(v_symbols), len(v_symbols[0])], dtype=complex)
-
-    for snr_idx in range(len(h_symbols)):
-        h_symbols_inverted[snr_idx]  = np.convolve(h_symbols[snr_idx], h2h_filter_inverted, mode="same")
-        h_symbols_inverted[snr_idx] += np.convolve(v_symbols[snr_idx], v2h_filter_inverted, mode="same")
-        v_symbols_inverted[snr_idx]  = np.convolve(v_symbols[snr_idx], v2v_filter_inverted, mode="same")
-        v_symbols_inverted[snr_idx] += np.convolve(h_symbols[snr_idx], h2v_filter_inverted, mode="same")
-
-    return h_symbols_inverted, v_symbols_inverted
-
 def error_function(i,q):
     return (1 - (i*i))
 
@@ -80,6 +18,7 @@ def error_function(i,q):
 
 
 def compute_invert_filters(h_symbols, v_symbols, num_eq_filter_coefs):
+
     h2h = np.zeros(num_eq_filter_coefs, dtype=complex)
     h2v = np.zeros(num_eq_filter_coefs, dtype=complex)
     v2h = np.zeros(num_eq_filter_coefs, dtype=complex)
@@ -191,11 +130,6 @@ def compute_invert_filters(h_symbols, v_symbols, num_eq_filter_coefs):
         h_symbols_filtered[t] = complex(hi_out,hq_out)
         v_symbols_filtered[t] = complex(vi_out,vq_out)
 
-        radial_power_h[t] = helper_functions.est_symbol_power(h_symbols_filtered[t-256:t])
-        radial_esno_h[t] = helper_functions.est_symbol_radial_esno(h_symbols_filtered[t-256:t])
-        radial_power_v[t] = helper_functions.est_symbol_power(v_symbols_filtered[t-256:t])
-        radial_esno_v[t] = helper_functions.est_symbol_radial_esno(v_symbols_filtered[t-256:t])
-
         # if (t%100000 == 256):
         if (False):
             # print(f"h2h_power = {helper_functions.est_symbol_power(h2h)}")
@@ -233,6 +167,12 @@ def compute_invert_filters(h_symbols, v_symbols, num_eq_filter_coefs):
 
         if t < 256:
             continue
+
+        radial_power_h[t] = helper_functions.est_symbol_power(h_symbols_filtered[t-256:t])
+        radial_esno_h[t] = helper_functions.est_symbol_radial_esno(h_symbols_filtered[t-256:t])
+        radial_power_v[t] = helper_functions.est_symbol_power(v_symbols_filtered[t-256:t])
+        radial_esno_v[t] = helper_functions.est_symbol_radial_esno(v_symbols_filtered[t-256:t])
+
     
         # Add tap error terms to existing filters
         for n in range(num_eq_filter_coefs):
@@ -358,6 +298,11 @@ def compute_invert_filters(h_symbols, v_symbols, num_eq_filter_coefs):
     axs[1].plot(radial_esno_h)
     axs[1].plot(radial_esno_v)
 
+    print(f"radial_power_h = {radial_power_h[-1]}")
+    print(f"radial_power_v = {radial_power_v[-1]}")
+    print(f"radial_esno_h  = {radial_esno_h[-1]}")
+    print(f"radial_esno_v  = {radial_esno_v[-1]}")
+
     # fig,axs = plt.subplots(1,2)
     # fig.suptitle(f"Constellation Plots, mu = {mu}")
     # axs[0].set_title(f"h_out[{t-256}:{t}]")
@@ -367,7 +312,8 @@ def compute_invert_filters(h_symbols, v_symbols, num_eq_filter_coefs):
     # axs[1].scatter(v_symbols_filtered[t-256:t].real, v_symbols_filtered[t-256:t].imag)
     # axs[1].set_aspect("equal", "box")
 
-    # plt.show()
+    # plt.show(block=False)
+    # plt.pause(0.001)
         
     return (h2h,
             h2v,
@@ -384,48 +330,69 @@ def compute_dpae(h_symbols, v_symbols, num_eq_filter_coefs):
     #                                       , v2v_filter )
 
     # TODO sweep across list instead of just using last
-    (h2h_filter_inverted,
-     h2v_filter_inverted,
-     v2h_filter_inverted,
-     v2v_filter_inverted) = compute_invert_filters(h_symbols[-1],
-                                                   v_symbols[-1],
-                                                   num_eq_filter_coefs)
-    # fig,axs = plt.subplots(2,2)                  
-    # plt.suptitle("Inverted Filter Coefficients")
-    # axs[0][0].set_title("h2h_filter_inverted")
-    # axs[0][0].plot(h2h_filter_inverted.real)
-    # axs[0][0].plot(h2h_filter_inverted.imag)
-    # axs[0][1].set_title("v2h_filter_inverted")
-    # axs[0][1].plot(v2h_filter_inverted.real)
-    # axs[0][1].plot(v2h_filter_inverted.imag)
-    # axs[1][0].set_title("h2v_filter_inverted")
-    # axs[1][0].plot(h2v_filter_inverted.real)
-    # axs[1][0].plot(h2v_filter_inverted.imag)
-    # axs[1][1].set_title("v2v_filter_inverted")
-    # axs[1][1].plot(v2v_filter_inverted.real)
-    # axs[1][1].plot(v2v_filter_inverted.imag)
-    # plt.tight_layout()
 
-    # fig,axs = plt.subplots(2,2)
-    # plt.suptitle("Inverted Filter Spectrum (dB), relative frequency [-pi,pi]")
-    # x = np.linspace(-np.pi,np.pi,len(h2h_filter_inverted))
-    # axs[0][0].set_title("H2H_inv")
-    # axs[0][0].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h2h_filter_inverted))))
-    # axs[0][1].set_title("V2H_inv")
-    # axs[0][1].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(v2h_filter_inverted))))
-    # axs[1][0].set_title("H2V_inv")
-    # axs[1][0].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h2v_filter_inverted))))
-    # axs[1][1].set_title("V2V_inv")
-    # axs[1][1].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(v2v_filter_inverted))))
-    # plt.tight_layout()
+    num_sweeps = h_symbols.shape[0]
+
 
     h_symbols_inverted = np.zeros([len(h_symbols), len(h_symbols[0])], dtype=complex)
     v_symbols_inverted = np.zeros([len(v_symbols), len(v_symbols[0])], dtype=complex)
 
+    compute_filters_for_each_snr = True
+
+    if compute_filters_for_each_snr == False:
+        (h2h_filter_inverted,
+         h2v_filter_inverted,
+         v2h_filter_inverted,
+         v2v_filter_inverted) = compute_invert_filters(h_symbols[-1],
+                                                       v_symbols[-1],
+                                                       num_eq_filter_coefs)
+
     for snr_idx in range(len(h_symbols)):
+        if compute_filters_for_each_snr == True:
+            print(f"SNR = {snr_idx}")
+            (h2h_filter_inverted,
+             h2v_filter_inverted,
+             v2h_filter_inverted,
+             v2v_filter_inverted) = compute_invert_filters(h_symbols[snr_idx],
+                                                           v_symbols[snr_idx],
+                                                           num_eq_filter_coefs)
+            print()
+
         h_symbols_inverted[snr_idx]  = np.convolve(h_symbols[snr_idx], h2h_filter_inverted, mode="same")
         h_symbols_inverted[snr_idx] += np.convolve(v_symbols[snr_idx], v2h_filter_inverted, mode="same")
         v_symbols_inverted[snr_idx]  = np.convolve(v_symbols[snr_idx], v2v_filter_inverted, mode="same")
         v_symbols_inverted[snr_idx] += np.convolve(h_symbols[snr_idx], h2v_filter_inverted, mode="same")
+
+        if snr_idx != num_sweeps-1:
+            continue
+
+        fig,axs = plt.subplots(2,2)
+        plt.suptitle("DPAE Filter Coefficients")
+        axs[0][0].set_title("h2h_filter_inverted")
+        axs[0][0].plot(h2h_filter_inverted.real)
+        axs[0][0].plot(h2h_filter_inverted.imag)
+        axs[0][1].set_title("v2h_filter_inverted")
+        axs[0][1].plot(v2h_filter_inverted.real)
+        axs[0][1].plot(v2h_filter_inverted.imag)
+        axs[1][0].set_title("h2v_filter_inverted")
+        axs[1][0].plot(h2v_filter_inverted.real)
+        axs[1][0].plot(h2v_filter_inverted.imag)
+        axs[1][1].set_title("v2v_filter_inverted")
+        axs[1][1].plot(v2v_filter_inverted.real)
+        axs[1][1].plot(v2v_filter_inverted.imag)
+        plt.tight_layout()
+
+        # fig,axs = plt.subplots(2,2)
+        # plt.suptitle("Inverted Filter Spectrum (dB), relative frequency [-pi,pi]")
+        # x = np.linspace(-np.pi,np.pi,len(h2h_filter_inverted))
+        # axs[0][0].set_title("H2H_inv")
+        # axs[0][0].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h2h_filter_inverted))))
+        # axs[0][1].set_title("V2H_inv")
+        # axs[0][1].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(v2h_filter_inverted))))
+        # axs[1][0].set_title("H2V_inv")
+        # axs[1][0].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h2v_filter_inverted))))
+        # axs[1][1].set_title("V2V_inv")
+        # axs[1][1].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(v2v_filter_inverted))))
+        # plt.tight_layout()
 
     return h_symbols_inverted, v_symbols_inverted
