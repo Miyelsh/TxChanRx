@@ -9,8 +9,14 @@ import helper_functions
 matplotlib.rcParams.update({"axes.grid" : True})
 
 # Constants
-BITS_PER_SYMBOL = 2
-SYMBOL_POWER = 2.0
+# QPSK
+# BITS_PER_SYMBOL = 2
+# SYMBOL_POWER = 2.0 # +-1 with QPSK
+
+# 16QAM
+BITS_PER_SYMBOL = 4
+SYMBOL_POWER = 5.0/(2*np.sqrt(5)) # +-1 with 16QAM
+
 CHANNEL_SPS = 1
 CHANNEL_SNR_DB = 10
 
@@ -38,10 +44,45 @@ def convert_bits_to_symbols(bits, bits_per_symbol, average_power):
             symbol *= np.sqrt(2*average_power)
 
             symbols[symbol_idx] = symbol
+    elif bits_per_symbol == 4: # 16QAM
+        for bit_idx in np.arange(0, num_bits, 4):
+            symbol_idx = bit_idx//4
+            symbol_real = 0
+            symbol_imag = 0
+            # Pick real part from first 2 bits
+            if bits[bit_idx+0] == 1:
+                symbol_real = 2
+            if bits[bit_idx+1] == 1:
+                symbol_real += 1
+            # Pick imag part from last 2 bits
+            if bits[bit_idx+2] == 1:
+                symbol_imag = 2
+            if bits[bit_idx+3] == 1:
+                symbol_imag += 1
+
+            # Scale so power is 2
+            symbol = complex(symbol_real,symbol_imag)
+            symbol -= (1.5 + 1.5j)
+            symbol *= np.sqrt(average_power*2/5)
+
+            symbols[symbol_idx] = symbol
+
+        # For symbols to bits
+        # Look at I sample. Assume power is 2, so decision regions are made to be at midpoints. Eyeball it.
+        # Decide on first two bits from region in I
+        # Decide on second two bits from region in Q
+        # Voila
+        # Phase is important for this. DPAE dececision needs to turn 4 samples on each axis to a single one.
+        # Square or absolute value of QPSK: parabola
+        # Square or absolute value of 16QAM: Two points.
+        # Shift by mean, do square again. Should be collapesed to a single point.
+        # Try this error function with real data. Symbol to bits don't need to be implemented for this anyway.
 
     else:
         print(f"ERROR: {bits_per_symbol} is not a valid value for bits_per_symbol!")
         exit(1)
+
+    # print(f"{helper_functions.est_symbol_power(symbols)}")
 
     return symbols
 
@@ -50,7 +91,7 @@ def convert_symbols_to_bits(symbols, bits_per_symbol, expected_num_symbols):
 
     bits = np.zeros(expected_num_symbols*bits_per_symbol, dtype=int)
 
-    if bits_per_symbol == 2: # QPSK)
+    if bits_per_symbol == 2: # QPSK
         for symbol_idx in np.arange(expected_num_symbols-num_symbols, num_symbols, 1):
             bit_idx = symbol_idx*2
             symbol = symbols[symbol_idx]
@@ -80,20 +121,28 @@ def add_awgn(symbols, symbol_power, snr_db):
     awgn_noise = np.sqrt(noise_power/2)*(np.random.randn(num_symbols) + 1j*np.random.randn(num_symbols))
     return symbols + awgn_noise
 
-def plot_const(symbols, symbols_received, title=""):
-    figs, axs = plt.subplots(1,2)
+def plot_const(symbols_0, symbols_1, title=""):
+    figs, axs = plt.subplots(2,2)
 
     plt.suptitle(title)
 
-    axs[0].set_aspect("equal", "box")
-    axs[0].scatter(symbols.real, symbols.imag)
-    axs[0].set_xlim(-4,4)
-    axs[0].set_ylim(-4,4)
+    axs[0][0].set_aspect("equal", "box")
+    axs[0][0].scatter(symbols_0.real, symbols_0.imag)
+    axs[0][0].set_xlim(-4,4)
+    axs[0][0].set_ylim(-4,4)
 
-    axs[1].set_aspect("equal", "box")
-    axs[1].scatter(symbols_received.real, symbols_received.imag)
-    axs[1].set_xlim(-4,4)
-    axs[1].set_ylim(-4,4)
+    axs[0][1].set_aspect("equal", "box")
+    axs[0][1].scatter(symbols_1.real, symbols_1.imag)
+    axs[0][1].set_xlim(-4,4)
+    axs[0][1].set_ylim(-4,4)
+
+    axs[1][0].hist(symbols_0.real, bins=256 )
+    axs[1][0].hist(symbols_0.imag, bins=256 )
+    axs[1][0].set_xlim(-4,4)
+
+    axs[1][1].hist(symbols_1.real, bins=256 )
+    axs[1][1].hist(symbols_1.imag, bins=256 )
+    axs[1][1].set_xlim(-4,4)
 
     plt.tight_layout()
 
@@ -294,18 +343,18 @@ def equalize_rx_symbols(h_symbols, v_symbols, h2h_filter, h2v_filter, v2h_filter
     axs[1][1].plot(v2v_filter_inverted.imag)
     plt.tight_layout()
 
-    # fig,axs = plt.subplots(2,2)
-    # plt.suptitle("Channel Filter Spectrum (dB), relative frequency [-pi,pi]")
-    # x = np.linspace(-np.pi,np.pi,len(h2h_filter_inverted))
-    # axs[0][0].set_title("H2H")
-    # axs[0][0].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h2h_filter))))
-    # axs[0][1].set_title("V2H")
-    # axs[0][1].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(v2h_filter))))
-    # axs[1][0].set_title("H2V")
-    # axs[1][0].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h2v_filter))))
-    # axs[1][1].set_title("V2V")
-    # axs[1][1].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(v2v_filter))))
-    # plt.tight_layout()
+    fig,axs = plt.subplots(2,2)
+    plt.suptitle("Channel Filter Spectrum (dB), relative frequency [-pi,pi]")
+    x = np.linspace(-np.pi,np.pi,len(h2h_filter_inverted))
+    axs[0][0].set_title("H2H")
+    axs[0][0].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h2h_filter))))
+    axs[0][1].set_title("V2H")
+    axs[0][1].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(v2h_filter))))
+    axs[1][0].set_title("H2V")
+    axs[1][0].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h2v_filter))))
+    axs[1][1].set_title("V2V")
+    axs[1][1].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(v2v_filter))))
+    plt.tight_layout()
 
     # fig,axs = plt.subplots(2,2)
     # plt.suptitle("Inverted Filter Spectrum (dB), relative frequency [-pi,pi]")
@@ -337,20 +386,10 @@ def zero_pad(array,length_after_padding,equal_left_right=False):
     else:
         return np.pad(array, (0,length_after_padding-len(array)))
 
-def test_snr_sweep(random_seed=1234,num_symbols=2**16,num_chan_filter_coefs=8,num_eq_filter_coefs=1024,chan_filter_noise_power=0.1, test_dpae=True):
+def test_snr_sweep(random_seed=1234,num_symbols=2**18,num_chan_filter_coefs=8,num_eq_filter_coefs=1024,chan_filter_noise_power=0.1, snr_db_sweep=np.arange(0, 30, 1), test_dpae=True, dpae_mu=0.0005):
     np.random.seed(random_seed)
 
-    snr_db_sweep = np.arange(0, 31, 1)
-    
-    num_bits = num_symbols*BITS_PER_SYMBOL
-    h_bits_tx    = generate_bits(num_bits)
-    v_bits_tx    = generate_bits(num_bits)
-    h_symbols_tx = convert_bits_to_symbols(h_bits_tx, BITS_PER_SYMBOL, SYMBOL_POWER)
-    v_symbols_tx = convert_bits_to_symbols(v_bits_tx, BITS_PER_SYMBOL, SYMBOL_POWER)
-    
-    h_symbols_rx_noise_sweep = np.zeros([len(snr_db_sweep), len(h_symbols_tx)], dtype=complex)
-    v_symbols_rx_noise_sweep = np.zeros([len(snr_db_sweep), len(v_symbols_tx)], dtype=complex)
-
+    # Generate Channel Filters
     h2h_filter = np.zeros(num_chan_filter_coefs)
     h2v_filter = np.zeros(num_chan_filter_coefs)
     v2h_filter = np.zeros(num_chan_filter_coefs)
@@ -359,8 +398,9 @@ def test_snr_sweep(random_seed=1234,num_symbols=2**16,num_chan_filter_coefs=8,nu
     # Set middle coefficient to 1, making an all-pass filter
     h2h_filter[num_chan_filter_coefs//2-1] = 1
     v2v_filter[num_chan_filter_coefs//2-1] = 1
-    # h2v_filter[num_chan_filter_coefs//2-1] = 1
-    # v2h_filter[num_chan_filter_coefs//2-1] = 1
+
+    # h2v_filter[num_chan_filter_coefs//2-1] = 0.5
+    # v2h_filter[num_chan_filter_coefs//2-1] = 0.5
 
     filter_rand_scale = np.sqrt(chan_filter_noise_power/2)
     h2h_filter = h2h_filter + filter_rand_scale*(    np.random.randn(len(h2h_filter))
@@ -371,22 +411,34 @@ def test_snr_sweep(random_seed=1234,num_symbols=2**16,num_chan_filter_coefs=8,nu
                                                 + 1j*np.random.randn(len(v2h_filter)))
     v2v_filter = v2v_filter + filter_rand_scale*(    np.random.randn(len(v2v_filter))
                                                 + 1j*np.random.randn(len(v2v_filter)))
+    
+    num_bits = num_symbols*BITS_PER_SYMBOL
+    h_bits_tx    = generate_bits(num_bits)
+    v_bits_tx    = generate_bits(num_bits)
+    h_symbols_tx = convert_bits_to_symbols(h_bits_tx, BITS_PER_SYMBOL, SYMBOL_POWER)
+    v_symbols_tx = convert_bits_to_symbols(v_bits_tx, BITS_PER_SYMBOL, SYMBOL_POWER)
 
-    fig,axs = plt.subplots(2,2)
-    plt.suptitle("Channel Filter Coefficients")
-    axs[0][0].set_title("h2h_filter")
-    axs[0][0].plot(h2h_filter.real)
-    axs[0][0].plot(h2h_filter.imag)
-    axs[0][1].set_title("v2h_filter")
-    axs[0][1].plot(v2h_filter.real)
-    axs[0][1].plot(v2h_filter.imag)
-    axs[1][0].set_title("h2v_filter")
-    axs[1][0].plot(h2v_filter.real)
-    axs[1][0].plot(h2v_filter.imag)
-    axs[1][1].set_title("v2v_filter")
-    axs[1][1].plot(v2v_filter.real)
-    axs[1][1].plot(v2v_filter.imag)
-    plt.tight_layout()
+    # plot_const(h_symbols_tx, v_symbols_tx)
+    # plt.show()
+    
+    h_symbols_rx_noise_sweep = np.zeros([len(snr_db_sweep), len(h_symbols_tx)], dtype=complex)
+    v_symbols_rx_noise_sweep = np.zeros([len(snr_db_sweep), len(v_symbols_tx)], dtype=complex)
+
+    # fig,axs = plt.subplots(2,2)
+    # plt.suptitle("Channel Filter Coefficients")
+    # axs[0][0].set_title("h2h_filter")
+    # axs[0][0].plot(h2h_filter.real)
+    # axs[0][0].plot(h2h_filter.imag)
+    # axs[0][1].set_title("v2h_filter")
+    # axs[0][1].plot(v2h_filter.real)
+    # axs[0][1].plot(v2h_filter.imag)
+    # axs[1][0].set_title("h2v_filter")
+    # axs[1][0].plot(h2v_filter.real)
+    # axs[1][0].plot(h2v_filter.imag)
+    # axs[1][1].set_title("v2v_filter")
+    # axs[1][1].plot(v2v_filter.real)
+    # axs[1][1].plot(v2v_filter.imag)
+    # plt.tight_layout()
 
     h2h_filter = zero_pad(h2h_filter, num_eq_filter_coefs, True)
     h2v_filter = zero_pad(h2v_filter, num_eq_filter_coefs, True)
@@ -416,21 +468,21 @@ def test_snr_sweep(random_seed=1234,num_symbols=2**16,num_chan_filter_coefs=8,nu
                                 v2h_filter_normalized, v2v_filter_normalized,
                                 SYMBOL_POWER, snr_db, CHANNEL_SPS)
 
-    (h_symbols_inverted_rx_noise_sweep,
-     v_symbols_inverted_rx_noise_sweep) = \
-             equalize_rx_symbols(h_symbols_rx_noise_sweep,
-                                 v_symbols_rx_noise_sweep,
-                                 h2h_filter_normalized, h2v_filter_normalized,
-                                 v2h_filter_normalized, v2v_filter_normalized )
-
     (h_symbols_dpae_rx_noise_sweep, v_symbols_dpae_rx_noise_sweep) = (np.zeros((1,1)),np.zeros((1,1)))
     if (test_dpae):
         (h_symbols_dpae_rx_noise_sweep,
          v_symbols_dpae_rx_noise_sweep) = \
                  dpae.compute_dpae(h_symbols_rx_noise_sweep,
                                    v_symbols_rx_noise_sweep,
-                                   num_eq_filter_coefs)
+                                   num_eq_filter_coefs,
+                                   dpae_mu)
 
+    (h_symbols_inverted_rx_noise_sweep,
+     v_symbols_inverted_rx_noise_sweep) = \
+             equalize_rx_symbols(h_symbols_rx_noise_sweep,
+                                 v_symbols_rx_noise_sweep,
+                                 h2h_filter_normalized, h2v_filter_normalized,
+                                 v2h_filter_normalized, v2v_filter_normalized )
     # print(h_symbols_tx)
     # print(h_symbols_rx_noise_sweep[-1])
     # print(h_symbols_inverted_rx_noise_sweep[-1][-32:])
@@ -447,26 +499,27 @@ def test_snr_sweep(random_seed=1234,num_symbols=2**16,num_chan_filter_coefs=8,nu
     h_symbols_dpae_rx_noise_sweep_trimmed = h_symbols_dpae_rx_noise_sweep[:,num_eq_filter_coefs:-num_eq_filter_coefs] 
     v_symbols_dpae_rx_noise_sweep_trimmed = v_symbols_dpae_rx_noise_sweep[:,num_eq_filter_coefs:-num_eq_filter_coefs] 
 
-    # plot_const(h_symbols_tx, h_symbols_rx_noise_sweep_trimmed[-1], "Constellation before equalization")
-    # plot_const(h_symbols_tx, h_symbols_inverted_rx_noise_sweep_trimmed[-1], "Constellation after equalization")
-    # plot_const(h_symbols_tx, h_symbols_dpae_rx_noise_sweep_trimmed[-1], "Constellation after DPAE")
+    # plot_const(h_symbols_rx_noise_sweep_trimmed[-1], v_symbols_rx_noise_sweep_trimmed[-1], "Constellation before equalization")
+    # plot_const(h_symbols_inverted_rx_noise_sweep_trimmed[-1], v_symbols_inverted_rx_noise_sweep_trimmed[-1], "Constellation after equalization")
+    plot_const(h_symbols_dpae_rx_noise_sweep_trimmed[-1], v_symbols_dpae_rx_noise_sweep_trimmed[-1], "Constellation after DPAE")
+    plot_const(h_symbols_rx_noise_sweep_trimmed[-1], h_symbols_dpae_rx_noise_sweep_trimmed[-1], "Constellation Before/After DPAE")
 
-    # fig, axs = plt.subplots(3,2)
-    # plt.suptitle("H-Pol TX and RX Spectrum (dB), relative frequency [-pi,pi]")
-    # x = np.linspace(-np.pi,np.pi,len(h_symbols_tx_trimmed))
-    # axs[0][0].set_title("H-Pol TX Spectrum")
-    # axs[0][0].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h_symbols_tx_trimmed))))
-    # axs[1][0].set_title("H-Pol RX Spectrum Before Equalization")
-    # axs[1][0].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h_symbols_rx_noise_sweep_trimmed[-1]))))
-    # axs[2][0].set_title("V-Pol RX Spectrum After Equalization")
-    # axs[2][0].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(v_symbols_inverted_rx_noise_sweep_trimmed[-1]))))
-    # axs[0][1].set_title("V-Pol TX Spectrum")
-    # axs[0][1].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(v_symbols_tx_trimmed))))
-    # axs[1][1].set_title("H-Pol RX Spectrum Before Equalization")
-    # axs[1][1].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h_symbols_rx_noise_sweep_trimmed[-1]))))
-    # axs[2][1].set_title("V-Pol RX Spectrum After Equalization")
-    # axs[2][1].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(v_symbols_inverted_rx_noise_sweep_trimmed[-1]))))
-    # plt.tight_layout()
+    fig, axs = plt.subplots(3,2)
+    plt.suptitle("H-Pol TX and RX Spectrum (dB), relative frequency [-pi,pi]")
+    x = np.linspace(-np.pi,np.pi,len(h_symbols_tx_trimmed))
+    axs[0][0].set_title("H-Pol TX Spectrum")
+    axs[0][0].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h_symbols_tx_trimmed))))
+    axs[1][0].set_title("H-Pol RX Spectrum Before Equalization")
+    axs[1][0].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h_symbols_rx_noise_sweep_trimmed[-1]))))
+    axs[2][0].set_title("H-Pol RX Spectrum After Equalization")
+    axs[2][0].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h_symbols_inverted_rx_noise_sweep_trimmed[-1]))))
+    axs[0][1].set_title("V-Pol TX Spectrum")
+    axs[0][1].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(v_symbols_tx_trimmed))))
+    axs[1][1].set_title("H-Pol RX Spectrum Before Equalization")
+    axs[1][1].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h_symbols_rx_noise_sweep_trimmed[-1]))))
+    axs[2][1].set_title("V-Pol RX Spectrum After Equalization")
+    axs[2][1].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(v_symbols_inverted_rx_noise_sweep_trimmed[-1]))))
+    plt.tight_layout()
 
     # fig, axs = plt.subplots(3,1)
     # plt.suptitle("First 32 H-Pol Symbols")
@@ -516,12 +569,12 @@ def compute_theoretical_qpsk_ber(snr_array_db):
 
 def plot_sweep(h_bits_tx, v_bits_tx, h_symbols_tx, v_symbols_tx, h_symbols_rx_sweep, v_symbols_rx_sweep, sweep_params, sweep_param_name):
 
-    h_bits_received_noise_sweep = [
-            convert_symbols_to_bits(x, BITS_PER_SYMBOL, len(x))
-            for x in h_symbols_rx_sweep ]
-    v_bits_received_noise_sweep = [
-            convert_symbols_to_bits(x, BITS_PER_SYMBOL, len(x))
-            for x in v_symbols_rx_sweep ]
+    # h_bits_received_noise_sweep = [
+    #         convert_symbols_to_bits(x, BITS_PER_SYMBOL, len(x))
+    #         for x in h_symbols_rx_sweep ]
+    # v_bits_received_noise_sweep = [
+    #         convert_symbols_to_bits(x, BITS_PER_SYMBOL, len(x))
+    #         for x in v_symbols_rx_sweep ]
 
     h_qpsk_esnos = np.array([ est_symbol_qpsk_esno(x, True) for x in h_symbols_rx_sweep ])
     v_qpsk_esnos = np.array([ est_symbol_qpsk_esno(x, True) for x in v_symbols_rx_sweep ])
@@ -538,6 +591,8 @@ def plot_sweep(h_bits_tx, v_bits_tx, h_symbols_tx, v_symbols_tx, h_symbols_rx_sw
     h_tx_rx_esnos = [ est_symbol_tx_rx_esno(h_symbols_tx,x,normalize_symbols=True) for x in h_symbols_rx_sweep ]
     v_tx_rx_esnos = [ est_symbol_tx_rx_esno(v_symbols_tx,x,normalize_symbols=True) for x in v_symbols_rx_sweep ]
     average_tx_rx_esnos = (np.array(h_tx_rx_esnos) + np.array(v_tx_rx_esnos))/2.0
+
+    print(f"average_tx_rx_esnos with {sweep_params[-1]} dB SNR = {average_tx_rx_esnos[-1]}")
 
     # plt.figure()
     # plt.title(f"{sweep_param_name} vs Estimated H-Pol EsNo (dB)")
@@ -578,26 +633,36 @@ def plot_sweep(h_bits_tx, v_bits_tx, h_symbols_tx, v_symbols_tx, h_symbols_rx_sw
     # plt.xlabel(sweep_param_name)
     # plt.legend(["QPSK EsNo", "QPSK EsNo (no abs correction)", "Radial EsNo", "TX/RX EsNo"])
 
-    h_bit_error_rates = [ bit_error_rate(h_bits_tx,x) for x in h_bits_received_noise_sweep ]
-    v_bit_error_rates = [ bit_error_rate(v_bits_tx,x) for x in v_bits_received_noise_sweep ]
-    average_bit_error_rates = (np.array(h_bit_error_rates) + np.array(v_bit_error_rates))/2.0
+    # h_bit_error_rates = [ bit_error_rate(h_bits_tx,x) for x in h_bits_received_noise_sweep ]
+    # v_bit_error_rates = [ bit_error_rate(v_bits_tx,x) for x in v_bits_received_noise_sweep ]
+    # average_bit_error_rates = (np.array(h_bit_error_rates) + np.array(v_bit_error_rates))/2.0
 
-    theoretical_qpsk_ber = compute_theoretical_qpsk_ber(sweep_params)
+    # theoretical_qpsk_ber = compute_theoretical_qpsk_ber(sweep_params)
 
-    plt.figure()
-    plt.title(f"{sweep_param_name} vs Bit Error Rate")
-    plt.semilogy(sweep_params, theoretical_qpsk_ber)
-    plt.semilogy(sweep_params, h_bit_error_rates)
-    plt.semilogy(sweep_params, v_bit_error_rates)
-    plt.semilogy(sweep_params, average_bit_error_rates)
-    plt.xlabel(sweep_param_name)
-    plt.xticks(np.arange(-0,16))
-    plt.xlim((-0,15))
-    plt.ylim((1e-8, 1e-0))
-    plt.legend(["Theoretical QPSK Bit Error Rate", "H-Pol Bit Error Rate", "V-Pol Bit Error Rate", "Average of H-Pol and V-Pol Bit Error Rate"])
+    # plt.figure()
+    # plt.title(f"{sweep_param_name} vs Bit Error Rate")
+    # plt.semilogy(sweep_params, theoretical_qpsk_ber)
+    # plt.semilogy(sweep_params, h_bit_error_rates)
+    # plt.semilogy(sweep_params, v_bit_error_rates)
+    # plt.semilogy(sweep_params, average_bit_error_rates)
+    # plt.xlabel(sweep_param_name)
+    # plt.xticks(np.arange(-0,16))
+    # plt.xlim((-0,15))
+    # plt.ylim((1e-8, 1e-0))
+    # plt.legend(["Theoretical QPSK Bit Error Rate", "H-Pol Bit Error Rate", "V-Pol Bit Error Rate", "Average of H-Pol and V-Pol Bit Error Rate"])
 
 def main():
-    test_snr_sweep(random_seed=4,num_symbols=2**18,num_chan_filter_coefs=8,num_eq_filter_coefs=64,chan_filter_noise_power=0.05, test_dpae=True)
+    snr_db_sweep = np.arange(0, 31, 5)
+
+    import time
+
+    start_time = time.clock_gettime(0)
+
+    test_snr_sweep(random_seed=3,num_symbols=2**18,num_chan_filter_coefs=2,num_eq_filter_coefs=32,chan_filter_noise_power=0.5, snr_db_sweep=snr_db_sweep, test_dpae=True, dpae_mu=0.0001)
+
+    end_time = time.clock_gettime(0)
+
+    print(f"Run time = {int(end_time-start_time)} seconds")
 
     # test_phase_sweep(h_bits_tx, v_bits_tx, h_symbols_tx, v_symbols_tx)
 
