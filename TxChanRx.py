@@ -129,12 +129,12 @@ def plot_const(symbols_0, symbols_1, title=""):
     axs[0][1].set_xlim(-4,4)
     axs[0][1].set_ylim(-4,4)
 
-    axs[1][0].hist(symbols_0.real, bins=256 )
-    axs[1][0].hist(symbols_0.imag, bins=256 )
+    axs[1][0].hist(symbols_0.real, bins=256, density=True)
+    # axs[1][0].hist(symbols_0.imag, bins=256 )
     axs[1][0].set_xlim(-4,4)
 
-    axs[1][1].hist(symbols_1.real, bins=256 )
-    axs[1][1].hist(symbols_1.imag, bins=256 )
+    axs[1][1].hist(symbols_1.real, bins=256, density=True)
+    # axs[1][1].hist(symbols_1.imag, bins=256 )
     axs[1][1].set_xlim(-4,4)
 
     plt.tight_layout()
@@ -218,32 +218,6 @@ def est_symbol_qpsk_esno(symbols, symbol_power, enable_abs_correction):
     qpsk_esno_linear = symbol_power/noise_power
     return helper_functions.convert_power_to_db(qpsk_esno_linear)
 
-def est_symbol_tx_rx_esno(symbols_tx,symbols_rx,normalize_symbols):
-    symbols_diff = symbols_tx - symbols_rx
-    noise_power = helper_functions.est_symbol_power(symbols_diff)
-    symbol_power = helper_functions.est_symbol_power(symbols_rx) - noise_power
-
-    if normalize_symbols == True:
-        symbols_tx_scale_factor = np.mean(np.abs(symbols_tx))
-        symbols_rx_scale_factor = np.mean(np.abs(symbols_rx))
-        # symbols_tx_scale_factor = np.sqrt(np.mean(np.abs(symbols_tx*symbols_tx.conj())))
-        # symbols_rx_scale_factor = np.sqrt(np.mean(np.abs(symbols_rx*symbols_rx.conj())))
-        # print(f"symbols_tx_scale_factor = {symbols_tx_scale_factor}")
-        # print(f"symbols_rx_scale_factor = {symbols_rx_scale_factor}")
-        symbols_tx_normalized = symbols_tx/symbols_tx_scale_factor
-        symbols_rx_normalized = symbols_rx/symbols_rx_scale_factor
-        # plot_const(symbols_tx_normalized, symbols_rx_normalized)
-        # plt.show()
-        symbols_diff = symbols_tx_normalized - symbols_rx_normalized
-        # plot_const(symbols_rx_normalized, symbols_diff)
-        noise_power = helper_functions.est_symbol_power(symbols_diff)
-        symbol_power = helper_functions.est_symbol_power(symbols_rx_normalized) - noise_power
-        # print(f"noise_power  = {noise_power}")
-        # print(f"symbol_power = {symbol_power}")
-
-    # print(f"symbol_power = {symbol_power}")
-    esno_linear = symbol_power/noise_power
-    return helper_functions.convert_power_to_db(esno_linear)
 
 def est_phase(x):
     # returns estimated angle in range (-pi/4,pi/4)
@@ -476,6 +450,7 @@ def test_snr_sweep(random_seed=1234,
          v_symbols_dpae_rx_noise_sweep) = \
                  dpae.compute_dpae(h_symbols_rx_noise_sweep,
                                    v_symbols_rx_noise_sweep,
+                                   bits_per_symbol,
                                    num_eq_filter_coefs,
                                    dpae_mu)
 
@@ -584,8 +559,8 @@ def plot_sweep(h_bits_tx, v_bits_tx, h_symbols_tx, v_symbols_tx, h_symbols_rx_sw
     v_radial_esnos = np.array([ helper_functions.est_symbol_radial_esno(x) for x in v_symbols_rx_sweep ])
     average_radial_esnos = (np.array(h_radial_esnos) + np.array(v_radial_esnos))/2.0
 
-    h_tx_rx_esnos = [ est_symbol_tx_rx_esno(h_symbols_tx,x,normalize_symbols=True) for x in h_symbols_rx_sweep ]
-    v_tx_rx_esnos = [ est_symbol_tx_rx_esno(v_symbols_tx,x,normalize_symbols=True) for x in v_symbols_rx_sweep ]
+    h_tx_rx_esnos = [ helper_functions.est_symbol_tx_rx_esno(h_symbols_tx,x,normalize_symbols=True) for x in h_symbols_rx_sweep ]
+    v_tx_rx_esnos = [ helper_functions.est_symbol_tx_rx_esno(v_symbols_tx,x,normalize_symbols=True) for x in v_symbols_rx_sweep ]
     average_tx_rx_esnos = (np.array(h_tx_rx_esnos) + np.array(v_tx_rx_esnos))/2.0
 
     print(f"average_tx_rx_esnos with {sweep_params[-1]} dB SNR = {average_tx_rx_esnos[-1]}")

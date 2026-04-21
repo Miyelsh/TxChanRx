@@ -2,9 +2,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 import helper_functions
 
-def error_function(i,q,idx,num_symbols):
+def signed_square_root(x):
+    # return x
+    return np.sign(x)*np.sqrt(np.abs(x))
+
+def error_function(i,bits_per_symbol,idx,num_symbols):
     # QPSK
-    # return (1 - (i*i))
+    if (bits_per_symbol == 2):
+        return (1-i*i)
+        # return signed_square_root(1 - (i*i))
 
     # return (2 - (i*i + q*q))
 
@@ -19,33 +25,35 @@ def error_function(i,q,idx,num_symbols):
 
 
     # 16 QAM
-    if idx < num_symbols/2:
-        # return 0.01*(1 - (i*i))**3
-        # return (1 - (i*i))
-        # return (1 - (i*i))
+    if (bits_per_symbol == 4):
+        if idx < num_symbols/2:
+            # return 0.01*(1 - (i*i))**3
+            # return (1 - (i*i))
+            # return (1 - (i*i))
 
+            # power = i*i
+            # if power < 0.9:
+            #     return +1
+            # elif power > 1.1:
+            #     return -1
+            # else:
+            #     return 0
+
+            return (1-i*i)# signed_square_root(1-i*i)
+
+        # 16 QAM
         power = i*i
-        if power > 1.0:
-            return -1
-        elif power < 1.0:
-            return +1
-        else:
-            return 0
+        if power < 5/9:
+            power += 8/9
+        return 4*(1 - power)
 
-    # 16 QAM
-    power = i*i
-    if power < 5/9:
-        power += 8/9
-    return 4*(1 - power)
-
-    # power = i*i
-    # if power < 5/9:
-    #     return 0
-    # return (1 - power)
+        # power = i*i
+        # if power < 5/9:
+        #     return 0
+        # return (1 - power)
 
 
-
-def compute_invert_filters(h_symbols, v_symbols, num_eq_filter_coefs, dpae_mu):
+def compute_invert_filters(h_symbols, v_symbols, bits_per_symbol, num_eq_filter_coefs, dpae_mu):
 
     h2h = np.zeros(num_eq_filter_coefs, dtype=complex)
     h2v = np.zeros(num_eq_filter_coefs, dtype=complex)
@@ -105,8 +113,10 @@ def compute_invert_filters(h_symbols, v_symbols, num_eq_filter_coefs, dpae_mu):
 
     power_h = np.zeros(len(h_symbols)-num_eq_filter_coefs)
     radial_esno_h  = np.zeros(len(h_symbols)-num_eq_filter_coefs)
+    # tx_rx_esno_h = np.zeros(len(h_symbols)-num_eq_filter_coefs)
     power_v = np.zeros(len(v_symbols)-num_eq_filter_coefs)
     radial_esno_v  = np.zeros(len(v_symbols)-num_eq_filter_coefs)
+    # tx_rx_esno_v = np.zeros(len(h_symbols)-num_eq_filter_coefs)
 
     hi2hi_error_avg = np.zeros(len(v_symbols)-num_eq_filter_coefs)
     hi2hq_error_avg = np.zeros(len(v_symbols)-num_eq_filter_coefs)
@@ -196,8 +206,10 @@ def compute_invert_filters(h_symbols, v_symbols, num_eq_filter_coefs, dpae_mu):
             # axs[0].plot(h2h.imag)
             print(f"radial_esno_h  = {radial_esno_h}")
             print(f"power_h = {power_h}")
+            print(f"tx_rx_esno_h  = {tx_rx_esno_h}")
             print(f"radial_esno_v  = {radial_esno_v}")
             print(f"power_v = {power_v}")
+            print(f"tx_rx_esno_v  = {tx_rx_esno_v}")
 
             plt.show()
 
@@ -206,42 +218,44 @@ def compute_invert_filters(h_symbols, v_symbols, num_eq_filter_coefs, dpae_mu):
 
         power_h[t] = helper_functions.est_symbol_power(h_symbols_filtered[t-256:t])
         radial_esno_h[t] = helper_functions.est_symbol_radial_esno(h_symbols_filtered[t-256:t])
+        # tx_rx_esno_h[t] = helper_functions.est_symbol_tx_rx_esno(h_symbols[t-256:t], h_symbols_filtered[t-256:t], True)
         power_v[t] = helper_functions.est_symbol_power(v_symbols_filtered[t-256:t])
         radial_esno_v[t] = helper_functions.est_symbol_radial_esno(v_symbols_filtered[t-256:t])
+        # tx_rx_esno_v[t] = helper_functions.est_symbol_tx_rx_esno(v_symbols[t-256:t], v_symbols_filtered[t-256:t], True)
 
         iir_step_size = 0.002
     
         # Add tap error terms to existing filters
         for n in range(num_eq_filter_coefs):
-            hi2hi_error = error_function(hi_out, hq_out, t, num_symbols) \
+            hi2hi_error = error_function(hi_out, bits_per_symbol, t, num_symbols) \
                         * hi_out \
                         * hi_in[N-n]
 
-            hi2hq_error = error_function(hq_out, hi_out, t, num_symbols) \
+            hi2hq_error = error_function(hq_out, bits_per_symbol, t, num_symbols) \
                         * hq_out \
                         * hi_in[N-n]
 
-            hi2vi_error = error_function(vi_out, vq_out, t, num_symbols) \
+            hi2vi_error = error_function(vi_out, bits_per_symbol, t, num_symbols) \
                         * vi_out \
                         * hi_in[N-n]
 
-            hi2vq_error = error_function(vq_out, vi_out, t, num_symbols) \
+            hi2vq_error = error_function(vq_out, bits_per_symbol, t, num_symbols) \
                         * vq_out \
                         * hi_in[N-n]
 
-            vi2hi_error = error_function(hi_out, hq_out, t, num_symbols) \
+            vi2hi_error = error_function(hi_out, bits_per_symbol, t, num_symbols) \
                         * hi_out \
                         * vi_in[N-n]
 
-            vi2hq_error = error_function(hq_out, hi_out, t, num_symbols) \
+            vi2hq_error = error_function(hq_out, bits_per_symbol, t, num_symbols) \
                         * hq_out \
                         * vi_in[N-n]
 
-            vi2vi_error = error_function(vi_out, vq_out, t, num_symbols) \
+            vi2vi_error = error_function(vi_out, bits_per_symbol, t, num_symbols) \
                         * vi_out \
                         * vi_in[N-n]
 
-            vi2vq_error = error_function(vq_out, vi_out, t, num_symbols) \
+            vi2vq_error = error_function(vq_out, bits_per_symbol, t, num_symbols) \
                         * vq_out \
                         * vi_in[N-n]
 
@@ -293,6 +307,13 @@ def compute_invert_filters(h_symbols, v_symbols, num_eq_filter_coefs, dpae_mu):
     # axs[1].plot(radial_esno_v)
     # plt.tight_layout()
 
+
+    # plt.figure()
+    # plt.title("RX/RX EsNO")
+    # plt.plot(tx_rx_esno_h)
+    # plt.plot(tx_rx_esno_v)
+    # plt.tight_layout()
+
     fig,axs = plt.subplots(1,2)
     fig.suptitle(f"Power, DPAE mu (convergence rate) = {dpae_mu}")
     axs[0].set_title("H-Pol Power")
@@ -321,29 +342,42 @@ def compute_invert_filters(h_symbols, v_symbols, num_eq_filter_coefs, dpae_mu):
     axs[1][3].plot(vi2vq_error_avg[256:])
     plt.tight_layout()
 
-    plt.figure()
-    plt.hist([error_function(x,0,1,3) for x in h_symbols.real], bins=256 )
-    plt.hist([error_function(x,0,1,3) for x in h_symbols.imag], bins=256 )
+    # plt.figure()
+    # plt.hist([error_function(x,bits_per_symbol,1,3)**2 for x in h_symbols.real], bins=256 )
+    # plt.hist([error_function(x,bits_per_symbol,1,3)**2 for x in h_symbols.imag], bins=256 )
 
-    plt.figure()
-    plt.hist([error_function(x,0,2,3) for x in h_symbols.real], bins=256 )
-    plt.hist([error_function(x,0,2,3) for x in h_symbols.imag], bins=256 )
+    # plt.figure()
+    # plt.hist([error_function(x,bits_per_symbol,2,3)**2 for x in h_symbols.real], bins=256 )
+    # plt.hist([error_function(x,bits_per_symbol,2,3)**2 for x in h_symbols.imag], bins=256 )
 
-    plt.figure()
-    plt.hist([error_function(x,0,1,3) for x in h_symbols_filtered.real], bins=256 )
-    plt.hist([error_function(x,0,1,3) for x in h_symbols_filtered.imag], bins=256 )
+    # plt.figure()
+    # plt.hist([error_function(x,bits_per_symbol,1,3)**2 for x in h_symbols_filtered.real], bins=256 )
+    # plt.hist([error_function(x,bits_per_symbol,1,3)**2 for x in h_symbols_filtered.imag], bins=256 )
 
-    plt.figure()
-    plt.hist([error_function(x,0,2,3) for x in h_symbols_filtered.real], bins=256 )
-    plt.hist([error_function(x,0,2,3) for x in h_symbols_filtered.imag], bins=256 )
+    # plt.figure()
+    # plt.hist([error_function(x,bits_per_symbol,2,3)**2 for x in h_symbols_filtered.real], bins=256 )
+    # plt.hist([error_function(x,bits_per_symbol,2,3)**2 for x in h_symbols_filtered.imag], bins=256 )
     # plt.hist([x for x in h_symbols_filtered.real],bins=256 )
 
     # plt.show()
 
     plt.figure()
-    plt.title("")
-    plt.plot(np.arange(-2,2,.1), [error_function(x,0,1,3) for x in np.arange(-2,2,.1) ] )
-    plt.plot(np.arange(-2,2,.1), [error_function(x,0,2,3) for x in np.arange(-2,2,.1) ] )
+    plt.title("Unfiltered Symbols & Cost Function (squared)")
+    test_range = np.arange(-2,2,0.01)
+    plt.plot(test_range, [error_function(x,bits_per_symbol,1,3)**2 for x in test_range ] )
+    plt.plot(test_range, [error_function(x,bits_per_symbol,2,3)**2 for x in test_range ] )
+    plt.hist(h_symbols.real, bins=1024, density=True)
+    plt.xlim([-2,2])
+    plt.ylim([0,4])
+
+    plt.figure()
+    plt.title("Filtered Symbols & Cost Function (squared)")
+    test_range = np.arange(-2,2,0.01)
+    plt.plot(test_range, [error_function(x,bits_per_symbol,1,3)**2 for x in test_range ] )
+    plt.plot(test_range, [error_function(x,bits_per_symbol,2,3)**2 for x in test_range ] )
+    plt.hist(h_symbols_filtered.real, bins=1024, density=True)
+    plt.xlim([-2,2])
+    plt.ylim([0,4])
 
     # plt.figure()
     # plt.plot(1 - h_symbols_filtered.real*h_symbols_filtered.real, ".")
@@ -392,7 +426,7 @@ def compute_invert_filters(h_symbols, v_symbols, num_eq_filter_coefs, dpae_mu):
             v2h,
             v2v)
 
-def compute_dpae(h_symbols, v_symbols, num_eq_filter_coefs, dpae_mu):
+def compute_dpae(h_symbols, v_symbols, bits_per_symbol, num_eq_filter_coefs, dpae_mu):
     # (h2h_filter_inverted,
     #  h2v_filter_inverted,
     #  v2h_filter_inverted,
@@ -416,6 +450,7 @@ def compute_dpae(h_symbols, v_symbols, num_eq_filter_coefs, dpae_mu):
          v2h_filter_inverted,
          v2v_filter_inverted) = compute_invert_filters(h_symbols[-1],
                                                        v_symbols[-1],
+                                                       bits_per_symbol,
                                                        num_eq_filter_coefs,
                                                        dpae_mu)
 
@@ -427,6 +462,7 @@ def compute_dpae(h_symbols, v_symbols, num_eq_filter_coefs, dpae_mu):
              v2h_filter_inverted,
              v2v_filter_inverted) = compute_invert_filters(h_symbols[snr_idx],
                                                            v_symbols[snr_idx],
+                                                           bits_per_symbol,
                                                            num_eq_filter_coefs,
                                                            dpae_mu)
             print()
