@@ -311,17 +311,24 @@ def equalize_rx_symbols(h_symbols, v_symbols, symbol_power, h2h_filter, h2v_filt
     plt.tight_layout()
 
     fig,axs = plt.subplots(2,2)
+    h2h_channel_spectrum = helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h2h_filter)))
+    v2h_channel_spectrum = helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h2h_filter)))
+    h2v_channel_spectrum = helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h2v_filter)))
+    v2v_channel_spectrum = helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(v2v_filter)))
     plt.suptitle("Channel Filter Spectrum (dB), relative frequency [-pi,pi]")
     x = np.linspace(-np.pi,np.pi,len(h2h_filter_inverted))
     axs[0][0].set_title("H2H")
-    axs[0][0].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h2h_filter))))
+    axs[0][0].plot(x, h2h_channel_spectrum)
     axs[0][1].set_title("V2H")
-    axs[0][1].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(v2h_filter))))
+    axs[0][1].plot(x, v2h_channel_spectrum)
     axs[1][0].set_title("H2V")
-    axs[1][0].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h2v_filter))))
+    axs[1][0].plot(x, h2v_channel_spectrum)
     axs[1][1].set_title("V2V")
-    axs[1][1].plot(x, helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(v2v_filter))))
+    axs[1][1].plot(x, v2v_channel_spectrum)
     plt.tight_layout()
+
+    print(f"Min H2H Channel Power (dB) = {np.min(h2h_channel_spectrum)}")
+    print(f"Min V2V Channel Power (dB) = {np.min(v2v_channel_spectrum)}")
 
     # fig,axs = plt.subplots(2,2)
     # plt.suptitle("Inverted Filter Spectrum (dB), relative frequency [-pi,pi]")
@@ -448,7 +455,9 @@ def test_snr_sweep(random_seed=1234,
     if (test_dpae):
         (h_symbols_dpae_rx_noise_sweep,
          v_symbols_dpae_rx_noise_sweep) = \
-                 dpae.compute_dpae(h_symbols_rx_noise_sweep,
+                 dpae.compute_dpae(h_symbols_tx[num_eq_filter_coefs//2:],
+                                   v_symbols_tx[num_eq_filter_coefs//2:],
+                                   h_symbols_rx_noise_sweep,
                                    v_symbols_rx_noise_sweep,
                                    bits_per_symbol,
                                    num_eq_filter_coefs,
