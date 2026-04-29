@@ -9,13 +9,16 @@ def signed_square_root(x):
 def error_function(i,bits_per_symbol,idx,num_symbols):
     # QPSK
     if (bits_per_symbol == 2):
-        return (1-i*i)
-        # return signed_square_root(1 - (i*i))
+        if idx < num_symbols/2:
+            return (1-i*i)
+        else:
+            return 0.01*(1-i*i)
+    #     return signed_square_root(1 - (i*i))
 
     # return (2 - (i*i + q*q))
 
     # power = i*i + q*q
-    # # power = i*i
+    # power = i*i
     # if power > 2.0:
     #     return -1
     # elif power < 2.0:
@@ -54,6 +57,14 @@ def error_function(i,bits_per_symbol,idx,num_symbols):
 
 
 def compute_invert_filters(h_symbols_tx, v_symbols_tx, h_symbols, v_symbols, bits_per_symbol, num_eq_filter_coefs, dpae_mu):
+
+    # iir_step_size = 0.002
+    # dpae_mu = 0.01
+    iir_step_size = 0.01
+    max_error = 0.1
+    print(f"{dpae_mu = }")
+    print(f"{iir_step_size = }")
+    print(f"{max_error = }")
 
     h2h = np.zeros(num_eq_filter_coefs, dtype=complex)
     h2v = np.zeros(num_eq_filter_coefs, dtype=complex)
@@ -264,6 +275,15 @@ def compute_invert_filters(h_symbols_tx, v_symbols_tx, h_symbols, v_symbols, bit
                         * vq_out \
                         * vi_in[N-n]
 
+            hi2hi_error = np.clip(hi2hi_error, -max_error, max_error)
+            hi2hq_error = np.clip(hi2hq_error, -max_error, max_error)
+            hi2vi_error = np.clip(hi2vi_error, -max_error, max_error)
+            hi2vq_error = np.clip(hi2vq_error, -max_error, max_error)
+            vi2hi_error = np.clip(vi2hi_error, -max_error, max_error)
+            vi2hq_error = np.clip(vi2hq_error, -max_error, max_error)
+            vi2vi_error = np.clip(vi2vi_error, -max_error, max_error)
+            vi2vq_error = np.clip(vi2vq_error, -max_error, max_error)
+
             hi2hi[n]    = hi2hi[n] + hi2hi_error*dpae_mu
             hi2hq[n]    = hi2hq[n] + hi2hq_error*dpae_mu
             hi2vi[n]    = hi2vi[n] + hi2vi_error*dpae_mu
@@ -295,12 +315,6 @@ def compute_invert_filters(h_symbols_tx, v_symbols_tx, h_symbols, v_symbols, bit
         vi2hq_error_avg[t] += (1-iir_step_size)*vi2hq_error_avg[t-1]
         vi2vi_error_avg[t] += (1-iir_step_size)*vi2vi_error_avg[t-1]
         vi2vq_error_avg[t] += (1-iir_step_size)*vi2vq_error_avg[t-1]
-
-        # breakpoint()
-
-        # Update CMA error IIR
-
-        # Compute tap error terms
 
     # fig,axs = plt.subplots(1,2)
     # fig.suptitle(f"Power and EsNo, mu = {mu}")
