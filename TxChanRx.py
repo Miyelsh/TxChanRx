@@ -679,10 +679,10 @@ def main():
     test_snr_sweep(random_seed=2,
                    bits_per_symbol=bits_per_symbol,
                    symbol_power=symbol_power,
-                   num_symbols=2**15,
+                   num_symbols=2**17,
                    num_chan_filter_coefs=2,
-                   num_eq_filter_coefs=16,
-                   chan_filter_noise_power=0.00,
+                   num_eq_filter_coefs=32,
+                   chan_filter_noise_power=0.1,
                    snr_db_sweep=snr_db_sweep,
                    test_dpae=True,
                    dpae_mu=0.005) # 0.00008 too high for seed 1 with power = 0.25

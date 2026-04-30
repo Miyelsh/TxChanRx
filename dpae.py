@@ -42,13 +42,13 @@ def error_function(i,bits_per_symbol,idx,num_symbols):
             # else:
             #     return 0
 
-            return 0.1*(2.2/2.4-i*i)# signed_square_root(1-i*i)
+            return 0.5*(2.2/2.4-i*i)# signed_square_root(1-i*i)
 
         # 16 QAM
         power = i*i
         if power < 5/9:
             power += 8/9
-        return 2*(1 - power)
+        return 0.5*(1 - power)
 
         # power = i*i
         # if power < 5/9:
