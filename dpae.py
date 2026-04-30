@@ -42,7 +42,10 @@ def error_function(i,bits_per_symbol,idx,num_symbols):
             # else:
             #     return 0
 
-            return 0.5*(2.2/2.4-i*i)# signed_square_root(1-i*i)
+            return 0.1*(2.2/2.4-i*i)# signed_square_root(1-i*i)
+
+        # return (1-i)*(1+i)*(1/3-i)*(1/3+i)
+        # return 0.001*(1-i*i)
 
         # 16 QAM
         power = i*i
@@ -380,14 +383,14 @@ def compute_invert_filters(h_symbols_tx, v_symbols_tx, h_symbols, v_symbols, bit
     # plt.xlim([-2,2])
     # plt.ylim([0,4])
 
-    # plt.figure()
-    # plt.title("Filtered Symbols & Cost Function (squared)")
-    # test_range = np.arange(-2,2,0.01)
-    # plt.plot(test_range, [error_function(x,bits_per_symbol,1,3)**2 for x in test_range ] )
-    # plt.plot(test_range, [error_function(x,bits_per_symbol,2,3)**2 for x in test_range ] )
-    # plt.hist(h_symbols_filtered.real, bins=1024, density=True)
-    # plt.xlim([-2,2])
-    # plt.ylim([0,4])
+    plt.figure()
+    plt.title("Filtered Symbols & Cost Function (squared)")
+    test_range = np.arange(-2,2,0.01)
+    plt.plot(test_range, [error_function(x,bits_per_symbol,1,3)**2 for x in test_range ] )
+    plt.plot(test_range, [error_function(x,bits_per_symbol,2,3)**2 for x in test_range ] )
+    plt.hist(h_symbols_filtered.real, bins=1024, density=True)
+    plt.xlim([-2,2])
+    plt.ylim([0,4])
 
     # plt.figure()
     # plt.plot(1 - h_symbols_filtered.real*h_symbols_filtered.real, ".")
