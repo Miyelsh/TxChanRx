@@ -294,21 +294,21 @@ def equalize_rx_symbols(h_symbols, v_symbols, symbol_power, h2h_filter, h2v_filt
     # print(f"v2h_filter_inverted_power = {helper_functions.est_symbol_power(v2h_filter_inverted)}")
     # print(f"v2v_filter_inverted_power = {helper_functions.est_symbol_power(v2v_filter_inverted)}")
 
-    # fig,axs = plt.subplots(2,2)
-    # plt.suptitle("Inverted Filter Coefficients")
-    # axs[0][0].set_title("h2h_filter_inverted")
-    # axs[0][0].plot(h2h_filter_inverted.real)
-    # axs[0][0].plot(h2h_filter_inverted.imag)
-    # axs[0][1].set_title("v2h_filter_inverted")
-    # axs[0][1].plot(v2h_filter_inverted.real)
-    # axs[0][1].plot(v2h_filter_inverted.imag)
-    # axs[1][0].set_title("h2v_filter_inverted")
-    # axs[1][0].plot(h2v_filter_inverted.real)
-    # axs[1][0].plot(h2v_filter_inverted.imag)
-    # axs[1][1].set_title("v2v_filter_inverted")
-    # axs[1][1].plot(v2v_filter_inverted.real)
-    # axs[1][1].plot(v2v_filter_inverted.imag)
-    # plt.tight_layout()
+    fig,axs = plt.subplots(2,2)
+    plt.suptitle("Inverted Filter Coefficients")
+    axs[0][0].set_title("h2h_filter_inverted")
+    axs[0][0].plot(h2h_filter_inverted.real)
+    axs[0][0].plot(h2h_filter_inverted.imag)
+    axs[0][1].set_title("v2h_filter_inverted")
+    axs[0][1].plot(v2h_filter_inverted.real)
+    axs[0][1].plot(v2h_filter_inverted.imag)
+    axs[1][0].set_title("h2v_filter_inverted")
+    axs[1][0].plot(h2v_filter_inverted.real)
+    axs[1][0].plot(h2v_filter_inverted.imag)
+    axs[1][1].set_title("v2v_filter_inverted")
+    axs[1][1].plot(v2v_filter_inverted.real)
+    axs[1][1].plot(v2v_filter_inverted.imag)
+    plt.tight_layout()
 
     # fig,axs = plt.subplots(2,2)
     h2h_channel_spectrum = helper_functions.convert_linear_to_db(np.fft.fftshift(np.fft.fft(h2h_filter)))
@@ -665,6 +665,8 @@ def main():
     bits_per_symbol = 4
     symbol_power = 5.0/(2*np.sqrt(5)) # +-1 with 16QAM
 
+    seed = 4 
+ 
     # test_snr_sweep(random_seed=2,
     #                bits_per_symbol=bits_per_symbol,
     #                symbol_power=symbol_power,
@@ -676,10 +678,10 @@ def main():
     #                test_dpae=True,
     #                dpae_mu=0.005) # 0.00008 too high for seed 1 with power = 0.25
 
-    test_snr_sweep(random_seed=2,
+    test_snr_sweep(random_seed=seed,
                    bits_per_symbol=bits_per_symbol,
                    symbol_power=symbol_power,
-                   num_symbols=2**19, # 19
+                   num_symbols=2**14, # 19
                    num_chan_filter_coefs=2,
                    num_eq_filter_coefs=32,
                    chan_filter_noise_power=0.2, #.2

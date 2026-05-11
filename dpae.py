@@ -45,13 +45,13 @@ def error_function(i,bits_per_symbol,idx,num_symbols):
             return 0.1*(2.2/2.4-i*i)# signed_square_root(1-i*i)
 
         # return (1-i)*(1+i)*(1/3-i)*(1/3+i)
-        # return 0.001*(1-i*i)
+        # return 0.001*(2.2/2.4-i*i)
 
         # 16 QAM
         power = i*i
         if power < 5/9:
             power += 8/9
-        return 0.5*(1 - power)
+        return 0.01*(1 - power)
 
         # power = i*i
         # if power < 5/9:
@@ -175,7 +175,7 @@ def compute_invert_filters(h_symbols_tx, v_symbols_tx, h_symbols, v_symbols, bit
         vi_out += np.convolve(vq_in, -vi2vq, mode="valid")[0] # vq2vi = -vi2vq
 
         vq_out  = np.convolve(hi_in,  hi2vq, mode="valid")[0]
-        vq_out += np.convolve(hq_in,  hi2vi, mode="valid")[0] # hq2vq = hi2hi
+        vq_out += np.convolve(hq_in,  hi2vi, mode="valid")[0] # hq2vq = hi2vi
         vq_out += np.convolve(vi_in,  vi2vq, mode="valid")[0]
         vq_out += np.convolve(vq_in,  vi2vi, mode="valid")[0] # vq2vq = vi2vi
         # vq_out  = np.convolve(hi_in, hi2vq, mode="valid")[0]
@@ -386,9 +386,10 @@ def compute_invert_filters(h_symbols_tx, v_symbols_tx, h_symbols, v_symbols, bit
     plt.figure()
     plt.title("Filtered Symbols & Cost Function (squared)")
     test_range = np.arange(-2,2,0.01)
-    plt.plot(test_range, [error_function(x,bits_per_symbol,1,3)**2 for x in test_range ] )
-    plt.plot(test_range, [error_function(x,bits_per_symbol,2,3)**2 for x in test_range ] )
+    plt.plot(test_range, [200*error_function(x,bits_per_symbol,1,3)**2 for x in test_range ] )
+    plt.plot(test_range, [80000*error_function(x,bits_per_symbol,2,3)**2 for x in test_range ] )
     plt.hist(h_symbols_filtered.real, bins=1024, density=True)
+    plt.legend(["Stage 1 Cost Function", "Stage 2 Cost Function"])
     plt.xlim([-2,2])
     plt.ylim([0,4])
 
